@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Blueprint Dark Theme */
+    --c-bg: #18181b;
+    --c-text: #fafafa;
+    --c-g50: #fafafa;
+    --c-g100: #f4f4f5;
+    --c-g200: #e4e4e7;
+    --c-g300: #d4d4d8;
+    --c-g400: #b4b4bc;
+    --c-g500: #8a8a93;
+    --c-g600: #6b6b74;
+    --c-g700: #3f3f46;
+    --c-g800: #27272a;
+    --c-g900: #18181b;
+    --c-g950: #09090b;
+    --c-accent: #22c55e;
+    --c-accent-hover: #4ade80;
+    --c-input-bg: #222226;
+    --c-scrollbar-track: #18181b;
+    --c-scrollbar-thumb: #3f3f46;
+    --c-scrollbar-hover: #52525b;
+  }
+
+  html {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 17px;
+    background-color: var(--c-bg);
+    color: var(--c-text);
+  }
+
+  body {
+    background-color: var(--c-bg);
+    color: var(--c-text);
+    font-family: 'JetBrains Mono', monospace;
+    overscroll-behavior: none;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--c-scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--c-scrollbar-thumb);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--c-scrollbar-hover);
+  }
+}
+
+@layer components {
+  /* Blueprint-style robot border input */
+  .robot-border {
+    @apply border border-[var(--c-g700)] bg-[var(--c-input-bg)] transition-colors;
+  }
+
+  .robot-border:focus-within {
+    @apply border-[var(--c-text)] outline-none;
+  }
+
+  /* Idea button glow effect */
+  .idea-btn-glow {
+    @apply relative bg-transparent z-0 shadow-lg;
+    box-shadow:
+      0 0 20px rgba(0, 0, 0, 0.15),
+      0 0 60px rgba(0, 0, 0, 0.05);
+  }
+
+  .idea-btn-glow::before {
+    content: '';
+    @apply absolute inset-0 -z-10 bg-amber-400;
+  }
+
+  .idea-btn-glow::after {
+    content: '';
+    @apply absolute inset-0 -z-10 bg-[var(--c-bg)];
+  }
+
+  /* Tab button styles */
+  .tab-btn {
+    @apply flex items-center gap-1.5 py-2 text-xs font-bold uppercase tracking-wider transition-all border border-gray-800 px-3 text-gray-500 hover:text-white;
+  }
+
+  .tab-btn.active {
+    @apply bg-white text-black border-white;
+  }
+
+  /* Primary button (Blueprint style: white bg, black text) */
+  .btn-primary {
+    @apply bg-white text-black font-semibold px-4 py-2 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary button */
+  .btn-secondary {
+    @apply border border-gray-800 text-gray-500 px-4 py-2 hover:border-gray-500 hover:text-white transition-all;
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply text-gray-400 hover:text-white transition-colors;
+  }
+
+  /* Part card */
+  .part-card {
+    @apply p-3 border border-[var(--c-g700)] hover:border-[var(--c-g500)] transition-all cursor-pointer;
+  }
+
+  /* Loading sweep animation */
+  @keyframes loading-sweep {
+    0% {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  .animate-loading-sweep {
+    animation: loading-sweep 0.6s linear infinite;
+  }
+}
