@@ -386,42 +386,6 @@ export default function BomTab() {
           )}
         </div>
       </div>
-
-      {/* Right sidebar - Parts List */}
-      <div className="w-56 border-l border-[var(--c-g800)] flex flex-col overflow-hidden shrink-0">
-        <div className="px-4 py-3 border-b border-[var(--c-g800)]">
-          <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--c-g500)]">Parts List</h3>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {['mcu', 'sensor', 'actuator', 'power', 'module', 'structural', 'enclosure', 'misc'].map((cat) => {
-            const catParts = searchedParts.filter((p) => p.category === cat)
-            if (!catParts.length) return null
-            return (
-              <div key={cat} className="border-b border-[var(--c-g900)]">
-                <div className="px-3 py-2 flex items-center gap-2 bg-[var(--c-g950)]">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getCategoryColor(cat) }} />
-                  <span className="text-[10px] font-bold text-[var(--c-g600)] uppercase">
-                    {getCategoryLabel(cat)}
-                  </span>
-                  <span className="text-[10px] text-[var(--c-g700)] ml-auto">{catParts.length}</span>
-                </div>
-                {catParts.map((part) => (
-                  <button
-                    key={part.id}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[var(--c-g900)] transition-colors"
-                  >
-                    <span className="text-[10px] text-[var(--c-g600)] truncate">{part.name}</span>
-                    <span className="text-[10px] text-[var(--c-g700)] ml-auto shrink-0">×{part.qty}</span>
-                  </button>
-                ))}
-              </div>
-            )
-          })}
-        </div>
-        <div className="px-4 py-2 border-t border-[var(--c-g800)] text-[10px] text-[var(--c-g600)]">
-          {searchedParts.length} parts · ${totalCost.toFixed(2)}
-        </div>
-      </div>
     </div>
   )
 }
