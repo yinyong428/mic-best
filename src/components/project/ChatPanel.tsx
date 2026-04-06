@@ -58,6 +58,7 @@ export default function ChatPanel() {
     setLoading(true)
 
     let fullThinking = ''
+    let capturedThinking = ''
 
     try {
       abortRef.current = new AbortController()
@@ -94,20 +95,19 @@ export default function ChatPanel() {
             const chunk: StreamingChunk = JSON.parse(data)
 
             if (chunk.phase === 'thinking') {
-              if (useChatStore.getState().isLoading) {
-                fullThinking += chunk.thinking ?? ''
-                setThinking(fullThinking)
-                useChatStore.setState((state) => ({
-                  messages: state.messages.map((m) =>
-                    m.id === aiMsgId
-                      ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
-                      : m
-                  ),
-                }))
-              }
+              fullThinking += chunk.thinking ?? ''
+              setThinking(fullThinking)
+              useChatStore.setState((state) => ({
+                messages: state.messages.map((m) =>
+                  m.id === aiMsgId
+                    ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
+                    : m
+                ),
+              }))
             }
 
             if (chunk.phase === 'parsing') {
+              capturedThinking = fullThinking  // snapshot before parsing clears it
               setThinking(chunk.progress ?? '正在解析…')
               useChatStore.setState((state) => ({
                 messages: state.messages.map((m) =>
@@ -144,8 +144,10 @@ export default function ChatPanel() {
               // Update store (live)
               updateBom(items, result.totalCost ?? 0, result.projectName, result.description)
 
+              // Use captured thinking as fallback if result.reasoning is missing
+              const reasoning = result.reasoning?.trim() || capturedThinking || ''
               const summary = `💡 **设计思路**
-${result.reasoning}
+${reasoning}
 
 ✅ **${result.projectName}**
 ${result.description}
