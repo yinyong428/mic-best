@@ -110,10 +110,11 @@ export async function streamGenerateBOM(
     let buffer = ''
     let fullText = ''
     let thinkingDone = false
+    let doneEmitted = false
 
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+      const { done: readerDone, value } = await reader.read()
+      if (readerDone) break
 
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
@@ -132,8 +133,11 @@ export async function streamGenerateBOM(
           fullText += token
 
           if (!thinkingDone) {
-            //实时emit thinking内容
-            onChunk({ phase: 'thinking', thinking: token })
+            // Strip any JSON-opening brace from the thinking text to avoid garbled display
+            const cleanToken = token.replace(/\{$/, '')
+            if (cleanToken) {
+              onChunk({ phase: 'thinking', thinking: cleanToken })
+            }
             //检测是否出现JSON
             const jsonStart = fullText.indexOf('{')
             if (jsonStart !== -1) {
@@ -156,11 +160,14 @@ export async function streamGenerateBOM(
           const jsonStr = fullText.slice(jsonStart, jsonEnd + 1)
           const result = JSON.parse(jsonStr) as BOMResult
           const itemCount = result.items?.length ?? 0
-          onChunk({
-            phase: 'done',
-            progress: `已生成 ${itemCount} 个元件，总成本 ¥${result.totalCost}`,
-            result,
-          })
+          if (!doneEmitted) {
+            doneEmitted = true
+            onChunk({
+              phase: 'done',
+              progress: `已生成 ${itemCount} 个元件，总成本 ¥${result.totalCost}`,
+              result,
+            })
+          }
         }
       } catch {
         onChunk({ phase: 'error', error: '解析 BOM 失败，请重试' })

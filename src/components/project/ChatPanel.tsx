@@ -94,16 +94,17 @@ export default function ChatPanel() {
             const chunk: StreamingChunk = JSON.parse(data)
 
             if (chunk.phase === 'thinking') {
-              fullThinking += chunk.thinking ?? ''
-              setThinking(fullThinking)
-              // Update the message content live
-              useChatStore.setState((state) => ({
-                messages: state.messages.map((m) =>
-                  m.id === aiMsgId
-                    ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
-                    : m
-                ),
-              }))
+              if (useChatStore.getState().isLoading) {
+                fullThinking += chunk.thinking ?? ''
+                setThinking(fullThinking)
+                useChatStore.setState((state) => ({
+                  messages: state.messages.map((m) =>
+                    m.id === aiMsgId
+                      ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
+                      : m
+                  ),
+                }))
+              }
             }
 
             if (chunk.phase === 'parsing') {
