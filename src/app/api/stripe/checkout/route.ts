@@ -4,9 +4,11 @@ import Stripe from 'stripe'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
-  apiVersion: '2025-02-24.acacia',
-})
+function getStripe(): Stripe | null {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key || key.startsWith('sk_test_your')) return null
+  return new Stripe(key, { apiVersion: '2025-02-24.acacia' })
+}
 
 const PRICE_IDS: Record<string, string> = {
   monthly: process.env.STRIPE_PRICE_MONTHLY ?? 'price_monthly_placeholder',
@@ -23,6 +25,11 @@ export async function POST(req: NextRequest) {
 
   if (!plan || !['monthly', 'yearly'].includes(plan)) {
     return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+  }
+
+  const stripe = getStripe()
+  if (!stripe) {
+    return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 })
   }
 
   const priceId = PRICE_IDS[plan]
