@@ -9,8 +9,6 @@ const WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET ?? ''
 
 function verifyPaddleSignature(rawBody: string, signature: string): boolean {
   if (!WEBHOOK_SECRET) return true // Skip in dev
-  // Paddle uses HMAC-SHA256 for webhook signature verification
-  // In production, use the official verify function from @paddle/paddle-js
   try {
     const crypto = require('crypto')
     const expected = crypto
@@ -45,20 +43,17 @@ export async function POST(req: NextRequest) {
       case 'subscription.created':
       case 'subscription.activated': {
         const sub = event.data
-        const customerId = sub.customer_id
-        const plan = sub.items?.[0]?.price?.id
         const userId = sub.custom_data?.user_id
 
         if (userId) {
           const supabase = createServerClient()
-          await supabase
-            .from('profiles')
-            .update({
-              plan: 'pro',
-              // Store Paddle subscription ID for reference
-            })
-            .eq('id', userId)
-          console.log(`[Paddle] User ${userId} upgraded to PRO (subscription: ${sub.id})`)
+          if (supabase) {
+            await supabase
+              .from('profiles')
+              .update({ plan: 'pro' })
+              .eq('id', userId)
+            console.log(`[Paddle] User ${userId} upgraded to PRO (subscription: ${sub.id})`)
+          }
         }
         break
       }
@@ -71,8 +66,7 @@ export async function POST(req: NextRequest) {
 
         if (userId) {
           const supabase = createServerClient()
-          // Only downgrade if explicitly cancelled
-          if (event.event_type === 'subscription.canceled') {
+          if (supabase && event.event_type === 'subscription.canceled') {
             await supabase
               .from('profiles')
               .update({ plan: 'free' })
@@ -84,7 +78,6 @@ export async function POST(req: NextRequest) {
       }
 
       case 'transaction.completed': {
-        // Payment successful - could track revenue, update credits, etc.
         const tx = event.data
         console.log(`[Paddle] Transaction completed: ${tx.id}, amount: ${tx.amount}`)
         break
