@@ -223,7 +223,7 @@ export default function HeroSection({ showIdeas, onToggleIdeas }: {
             {/* Actions */}
             <div className="flex gap-3 pt-2">
               <Link
-                href="/"
+                href="/project/generation"
                 className="px-5 py-2.5 bg-[var(--c-accent)] text-black font-bold text-sm rounded-lg hover:opacity-90 transition-opacity"
               >
                 查看完整项目 →
