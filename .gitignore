@@ -31,3 +31,4 @@ yarn-error.log*
 
 # Blueprint scraped resources (not needed in repo)
 resources/
+.vercel

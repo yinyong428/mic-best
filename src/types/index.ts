@@ -36,7 +36,8 @@ export interface Part {
     layerHeight: string
     infill: string
   }
-  amazonAsin?: string
+  lcscId?: string
+  hqPartNumber?: string
   position3d?: { x: number; y: number; z: number }
 }
 
@@ -87,6 +88,10 @@ export interface Project {
   instructions?: Instruction[]
   wiringNodes?: WiringNode[]
   wiringEdges?: WiringEdge[]
+  imageUrl?: string
+  tags?: string[]
+  starCount?: number
+  copyCount?: number
 }
 
 export interface Message {

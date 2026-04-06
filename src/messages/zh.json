@@ -1,0 +1,263 @@
+{
+  "common": {
+    "appName": "MIC.BEST",
+    "home": "首页",
+    "explore": "探索",
+    "pricing": "定价",
+    "login": "登录",
+    "signup": "注册",
+    "logout": "退出登录",
+    "loading": "加载中...",
+    "error": "错误",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "search": "搜索",
+    "back": "返回",
+    "next": "下一个",
+    "previous": "上一个",
+    "learnMore": "了解更多",
+    "getStarted": "立即开始",
+    "viewAll": "查看全部",
+    "termsOfService": "服务条款",
+    "privacyPolicy": "隐私协议"
+  },
+  "navbar": {
+    "menu": "菜单",
+    "account": "账户",
+    "myProjects": "我的项目",
+    "community": "社区",
+    "settings": "设置"
+  },
+  "home": {
+    "hero": {
+      "title": "你想建造什么？",
+      "subtitle": "通过与人工智能对话创建硬件原型设计",
+      "placeholder": "描述你想要制作的硬件项目……",
+      "send": "发送",
+      "needIdea": "需要灵感吗？"
+    },
+    "community": {
+      "title": "社区项目",
+      "more": "更多"
+    },
+    "myProjects": {
+      "title": "我的项目",
+      "empty": "还没有项目",
+      "create": "创建您的第一个项目"
+    },
+    "footer": {
+      "madeBy": "MIC.BEST - 中国制造·最棒"
+    }
+  },
+  "community": {
+    "title": "社区",
+    "subtitle": "探索社区发布的项目。",
+    "searchPlaceholder": "搜索项目关键词...",
+    "blueprints": "个项目",
+    "sort": {
+      "trending": "热门",
+      "recent": "最新",
+      "starred": "最多收藏"
+    },
+    "filter": {
+      "all": "全部",
+      "electronics": "电子",
+      "mechanical": "机械"
+    },
+    "loadMore": "加载更多",
+    "noResults": "未找到匹配的项目。"
+  },
+  "project": {
+    "tabs": {
+      "info": "信息",
+      "bom": "物料清单",
+      "wiring": "接线",
+      "mech": "机械",
+      "instructions": "组装说明",
+      "part": "零件"
+    },
+    "info": {
+      "billOfMaterials": "物料清单",
+      "steps": "步骤",
+      "parts": "零件",
+      "electrical": "电子",
+      "mechanical": "机械",
+      "total": "总计",
+      "items": "项",
+      "published": "已发布",
+      "draft": "草稿",
+      "author": "作者",
+      "created": "创建于",
+      "updated": "更新于",
+      "today": "今天"
+    },
+    "bom": {
+      "title": "物料清单",
+      "searchPlaceholder": "搜索零件...",
+      "filterAll": "全部",
+      "filterElectrical": "电子",
+      "filterMechanical": "机械",
+      "viewTable": "表格",
+      "viewCards": "卡片",
+      "source": "来源",
+      "subtotal": "小计",
+      "searchOnAmazon": "在亚马逊搜索",
+      "researchPart": "研究零件",
+      "partsList": "零件列表"
+    },
+    "wiring": {
+      "title": "接线图",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "fitView": "适应视图"
+    },
+    "mech": {
+      "title": "机械结构",
+      "dragHint": "拖动旋转 · 滚轮缩放 · 点击高亮零件",
+      "dimensions": "尺寸"
+    },
+    "instructions": {
+      "title": "组装说明",
+      "tools": "工具",
+      "assumptions": "前提条件",
+      "generate": "生成",
+      "generateAll": "全部生成",
+      "regenerate": "重新生成",
+      "parts": "个零件",
+      "phases": {
+        "fabricate": "制造",
+        "wire": "接线",
+        "bringup": "启动",
+        "assemble": "组装"
+      }
+    },
+    "part": {
+      "title": "零件",
+      "searchPlaceholder": "搜索零件...",
+      "filterAll": "全部",
+      "viewTable": "表格",
+      "viewCards": "卡片",
+      "findPart": "查找零件",
+      "findPartDesc": "描述您需要的组件，我们会推荐可添加到设计中的选项。",
+      "searchBtn": "搜索",
+      "suggestedParts": "推荐零件",
+      "add": "+ 添加",
+      "added": "已添加",
+      "downloadAllStl": "下载所有STL文件"
+    },
+    "chat": {
+      "placeholder": "请求修改...",
+      "collapse": "收起聊天",
+      "expand": "展开聊天"
+    },
+    "partsList": {
+      "title": "零件列表",
+      "collapse": "收起零件列表",
+      "expand": "展开零件列表"
+    },
+    "status": {
+      "published": "已发布",
+      "draft": "草稿"
+    },
+    "downloadZip": "下载项目ZIP"
+  },
+  "auth": {
+    "login": {
+      "title": "登录",
+      "email": "邮箱",
+      "password": "密码",
+      "submit": "登录",
+      "noAccount": "还没有账户？",
+      "signUp": "注册",
+      "agreeTerms": "登录即表示你同意我们的",
+      "and": "和"
+    },
+    "signup": {
+      "title": "注册",
+      "username": "用户名",
+      "email": "邮箱",
+      "password": "密码",
+      "confirmPassword": "确认密码",
+      "submit": "注册",
+      "hasAccount": "已有账户？",
+      "logIn": "登录",
+      "agreeTerms": "注册即表示你同意我们的",
+      "and": "和"
+    }
+  },
+  "account": {
+    "title": "账户",
+    "myProjects": "我的项目",
+    "favorites": "收藏",
+    "settings": "设置",
+    "credits": "积分",
+    "freePlan": "免费版",
+    "proPlan": "专业版",
+    "upgradeToPro": "升级到专业版",
+    "loginRequired": "请先登录",
+    "backToHome": "返回首页",
+    "logoutSuccess": "已退出登录"
+  },
+  "proBanner": {
+    "title": "升级到专业版，享受无限额度",
+    "subtitle": "无限制额度 · 优先体验新功能 · 专属技术支持",
+    "getPro": "获取专业版"
+  },
+  "pricing": {
+    "title": "选择您的计划",
+    "subtitle": "解锁无限创意",
+    "viewPlans": "查看定价方案",
+    "monthly": "月付",
+    "yearly": "节省32%",
+    "monthlyPrice": "¥49",
+    "yearlyPrice": "¥35",
+    "perMonth": "/月",
+    "perYear": "/年",
+    "yearlyTotal": "¥333/年",
+    "savings": "节省 ¥255/年",
+    "benefits": {
+      "unlimited": "无限设计额度",
+      "priority": "优先体验新功能",
+      "support": "专属技术支持"
+    },
+    "subscribeNow": "立即订阅",
+    "cancelNote": "取消方式：账户设置 → 订阅管理"
+  },
+  "settings": {
+    "title": "账户设置",
+    "basicInfo": "基本信息",
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "newPasswordPlaceholder": "至少6位",
+    "confirmPassword": "确认密码",
+    "saveChanges": "保存修改",
+    "notifications": "通知设置",
+    "projectUpdates": "项目更新通知",
+    "projectUpdatesDesc": "收藏的项目有新版本时通知",
+    "communityUpdates": "社区动态",
+    "communityUpdatesDesc": "热门项目和趋势更新",
+    "marketingEmails": "营销邮件",
+    "marketingEmailsDesc": "新功能和优惠信息",
+    "security": "安全",
+    "changePasswordBtn": "修改密码",
+    "deleteAccount": "删除账户",
+    "deleteAccountDesc": "删除账户及其所有数据",
+    "deleteConfirm": "确定删除账户？此操作不可撤销"
+  },
+  "stars": {
+    "title": "收藏",
+    "empty": "还没有收藏任何项目",
+    "emptyHint": "浏览社区，发现精彩项目"
+  },
+  "projects": {
+    "title": "我的项目",
+    "empty": "还没有任何项目",
+    "createFirst": "创建您的第一个项目"
+  },
+  "termsSection": "条款",
+  "privacySection": "隐私"
+}

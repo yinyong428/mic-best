@@ -1,0 +1,263 @@
+{
+  "common": {
+    "appName": "MIC.BEST",
+    "home": "Home",
+    "explore": "Explore",
+    "pricing": "Pricing",
+    "login": "Log In",
+    "signup": "Sign Up",
+    "logout": "Log Out",
+    "loading": "Loading...",
+    "error": "Error",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "search": "Search",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "learnMore": "Learn More",
+    "getStarted": "Get Started",
+    "viewAll": "View All",
+    "termsOfService": "Terms of Service",
+    "privacyPolicy": "Privacy Policy"
+  },
+  "navbar": {
+    "menu": "Menu",
+    "account": "Account",
+    "myProjects": "My Projects",
+    "community": "Community",
+    "settings": "Settings"
+  },
+  "home": {
+    "hero": {
+      "title": "What do you want to build?",
+      "subtitle": "Create hardware prototype designs by chatting with AI",
+      "placeholder": "Describe the hardware project you want to build...",
+      "send": "Send",
+      "needIdea": "Need an Idea?"
+    },
+    "community": {
+      "title": "Community Projects",
+      "more": "More"
+    },
+    "myProjects": {
+      "title": "My Projects",
+      "empty": "No projects yet",
+      "create": "Create your first project"
+    },
+    "footer": {
+      "madeBy": "MIC.BEST - 中国制造·最棒"
+    }
+  },
+  "community": {
+    "title": "Community",
+    "subtitle": "Explore projects published by the community.",
+    "searchPlaceholder": "Search blueprints by keyword...",
+    "blueprints": "blueprints",
+    "sort": {
+      "trending": "Trending",
+      "recent": "Recent",
+      "starred": "Most Starred"
+    },
+    "filter": {
+      "all": "All",
+      "electronics": "Electronics",
+      "mechanical": "Mechanical"
+    },
+    "loadMore": "Load More",
+    "noResults": "No blueprints found matching your search."
+  },
+  "project": {
+    "tabs": {
+      "info": "INFO",
+      "bom": "BOM",
+      "wiring": "WIRING",
+      "mech": "MECH",
+      "instructions": "INSTRUCTIONS",
+      "part": "PART"
+    },
+    "info": {
+      "billOfMaterials": "Bill of Materials",
+      "steps": "Steps",
+      "parts": "Parts",
+      "electrical": "Electrical",
+      "mechanical": "Mechanical",
+      "total": "Total",
+      "items": "items",
+      "published": "Published",
+      "draft": "Draft",
+      "author": "Author",
+      "created": "Created",
+      "updated": "Updated",
+      "today": "Today"
+    },
+    "bom": {
+      "title": "Bill of Materials",
+      "searchPlaceholder": "Search parts...",
+      "filterAll": "All",
+      "filterElectrical": "Electrical",
+      "filterMechanical": "Mechanical",
+      "viewTable": "Table",
+      "viewCards": "Cards",
+      "source": "Source",
+      "subtotal": "Subtotal",
+      "searchOnAmazon": "Search on Amazon",
+      "researchPart": "Research part",
+      "partsList": "Parts List"
+    },
+    "wiring": {
+      "title": "Wiring",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fitView": "Fit View"
+    },
+    "mech": {
+      "title": "Mech",
+      "dragHint": "Drag to rotate · Scroll to zoom · Click to highlight",
+      "dimensions": "Dimensions"
+    },
+    "instructions": {
+      "title": "Instructions",
+      "tools": "Tools",
+      "assumptions": "Assumptions",
+      "generate": "Generate",
+      "generateAll": "Generate All",
+      "regenerate": "Regenerate",
+      "parts": "parts",
+      "phases": {
+        "fabricate": "Fabricate",
+        "wire": "Wire",
+        "bringup": "Bring-up",
+        "assemble": "Assemble"
+      }
+    },
+    "part": {
+      "title": "PART",
+      "searchPlaceholder": "Search parts...",
+      "filterAll": "All",
+      "viewTable": "Table",
+      "viewCards": "Cards",
+      "findPart": "Find a Part",
+      "findPartDesc": "Describe the component you need and we'll suggest options to add to your design.",
+      "searchBtn": "Search",
+      "suggestedParts": "Suggested Parts",
+      "add": "+ Add",
+      "added": "Added",
+      "downloadAllStl": "Download All STL Files"
+    },
+    "chat": {
+      "placeholder": "Ask to modify...",
+      "collapse": "Collapse Chat",
+      "expand": "Expand Chat"
+    },
+    "partsList": {
+      "title": "Parts List",
+      "collapse": "Collapse Parts List",
+      "expand": "Expand Parts List"
+    },
+    "status": {
+      "published": "Published",
+      "draft": "Draft"
+    },
+    "downloadZip": "Download Project ZIP"
+  },
+  "auth": {
+    "login": {
+      "title": "Log In",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Log In",
+      "noAccount": "Don't have an account?",
+      "signUp": "Sign Up",
+      "agreeTerms": "By logging in, you agree to our",
+      "and": "and"
+    },
+    "signup": {
+      "title": "Sign Up",
+      "username": "Username",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "submit": "Sign Up",
+      "hasAccount": "Already have an account?",
+      "logIn": "Log In",
+      "agreeTerms": "By signing up, you agree to our",
+      "and": "and"
+    }
+  },
+  "account": {
+    "title": "Account",
+    "myProjects": "My Projects",
+    "favorites": "Favorites",
+    "settings": "Settings",
+    "credits": "Credits",
+    "freePlan": "Free Plan",
+    "proPlan": "Pro Plan",
+    "upgradeToPro": "Upgrade to Pro",
+    "loginRequired": "Please log in first",
+    "backToHome": "Back to Home",
+    "logoutSuccess": "Logged out"
+  },
+  "proBanner": {
+    "title": "Upgrade to Pro for unlimited credits",
+    "subtitle": "Unlimited credits · Priority access · Exclusive features",
+    "getPro": "Get Pro"
+  },
+  "pricing": {
+    "title": "Upgrade to Pro",
+    "subtitle": "Unlock unlimited creativity",
+    "viewPlans": "View Pricing Plans",
+    "monthly": "Monthly",
+    "yearly": "Save 32%",
+    "monthlyPrice": "$6",
+    "yearlyPrice": "$4.08",
+    "perMonth": "/month",
+    "perYear": "/year",
+    "yearlyTotal": "$49/year",
+    "savings": "Save $21/year",
+    "benefits": {
+      "unlimited": "Unlimited design credits",
+      "priority": "Access to better AI models",
+      "support": "Exclusive features"
+    },
+    "subscribeNow": "Subscribe Now",
+    "cancelNote": "Cancel anytime via Account Settings"
+  },
+  "settings": {
+    "title": "Account Settings",
+    "basicInfo": "Basic Info",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "newPasswordPlaceholder": "At least 6 characters",
+    "confirmPassword": "Confirm Password",
+    "saveChanges": "Save Changes",
+    "notifications": "Notification Settings",
+    "projectUpdates": "Project Updates",
+    "projectUpdatesDesc": "Notify when favorited projects have new versions",
+    "communityUpdates": "Community Updates",
+    "communityUpdatesDesc": "Hot projects and trending updates",
+    "marketingEmails": "Marketing Emails",
+    "marketingEmailsDesc": "New features and special offers",
+    "security": "Security",
+    "changePasswordBtn": "Change Password",
+    "deleteAccount": "Delete Account",
+    "deleteAccountDesc": "Delete account and all associated data",
+    "deleteConfirm": "Are you sure? This action cannot be undone."
+  },
+  "stars": {
+    "title": "Favorites",
+    "empty": "No favorites yet",
+    "emptyHint": "Browse the community to discover great projects"
+  },
+  "projects": {
+    "title": "My Projects",
+    "empty": "No projects yet",
+    "createFirst": "Create your first project"
+  },
+  "termsSection": "Terms",
+  "privacySection": "Privacy"
+}

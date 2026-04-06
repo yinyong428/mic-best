@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { useProjectStore } from '@/stores/projectStore'
 import type { ProjectTab } from '@/types'
 
@@ -69,12 +69,10 @@ export default function ProjectHeader() {
 
       {/* Right - Actions */}
       <div className="flex flex-1 items-center justify-end gap-2 shrink-0">
-        {/* Status badge */}
         <span className="text-xs font-bold uppercase bg-[var(--c-accent)] text-black px-2 py-1">
           {project.status}
         </span>
 
-        {/* Download */}
         <button className="btn-secondary text-xs flex items-center gap-1.5">
           <svg
             xmlns="http://www.w3.org/2000/svg"

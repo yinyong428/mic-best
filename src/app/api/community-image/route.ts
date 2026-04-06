@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+const BAILIAN_BASE = 'https://dashscope.aliyuncs.com/api/v1'
+
+// In-memory cache — in production this would be a DB
+const imageCache: Record<string, string> = {}
+
+export async function POST(req: NextRequest) {
+  const { projectId, prompt } = await req.json()
+
+  if (!projectId || !prompt) {
+    return NextResponse.json({ error: 'projectId and prompt required' }, { status: 400 })
+  }
+
+  // Return cached if available
+  if (imageCache[projectId]) {
+    return NextResponse.json({ success: true, imageUrl: imageCache[projectId], cached: true })
+  }
+
+  const apiKey = process.env.DASHSCOPE_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'DASHSCOPE_API_KEY not configured' }, { status: 500 })
+  }
+
+  const fullPrompt = `Professional hardware prototype: ${prompt}. Clean white background, technical product photography, photorealistic, sharp focus.`
+
+  try {
+    const response = await fetch(`${BAILIAN_BASE}/services/aigc/multimodal-generation/generation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'qwen-image-2.0-pro',
+        input: { messages: [{ role: 'user', content: [{ text: fullPrompt }] }] },
+        parameters: {
+          n: 1,
+          size: '1024*1024',
+          prompt_extend: true,
+          watermark: false,
+          negative_prompt: 'lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality',
+        },
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok || !data.output?.choices?.[0]?.message?.content?.[0]?.image) {
+      return NextResponse.json({ error: 'Image generation failed', detail: data }, { status: 500 })
+    }
+
+    const imageUrl = data.output.choices[0].message.content[0].image
+    imageCache[projectId] = imageUrl
+
+    return NextResponse.json({ success: true, imageUrl, cached: false })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}

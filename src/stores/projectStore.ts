@@ -5,6 +5,7 @@ interface ProjectStore {
   // Current project
   project: Project | null
   setProject: (project: Project | null) => void
+  setProjectImage: (imageUrl: string) => void
 
   // Active tab
   activeTab: ProjectTab
@@ -28,11 +29,28 @@ interface ProjectStore {
 
   // Update part quantity
   updatePartQty: (partId: string, qty: number) => void
+
+  // Update BOM from AI generation (items without id — id is assigned by the store)
+  updateBom: (items: Omit<Part, 'id'>[], totalCost: number, projectName?: string, description?: string) => void
+
+  // Persist to backend
+  saveProject: () => Promise<{ success: boolean; error?: string }>
+  loadProject: (id: string) => Promise<{ success: boolean; error?: string }>
 }
 
-export const useProjectStore = create<ProjectStore>((set) => ({
+export const useProjectStore = create<ProjectStore>((set, get) => ({
   project: null,
-  setProject: (project) => set({ project }),
+  setProject: (project) =>
+    set((state) => {
+      if (!project) return { project: null }
+      return { project: { ...(state.project ?? {}), ...project } }
+    }),
+
+  setProjectImage: (imageUrl) =>
+    set((state) => {
+      if (!state.project) return state
+      return { project: { ...state.project, imageUrl } }
+    }),
 
   activeTab: 'info',
   setTab: (tab) => set({ activeTab: tab }),
@@ -58,4 +76,99 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const totalCost = parts.reduce((sum, p) => sum + p.unitCost * p.qty, 0)
       return { project: { ...state.project, parts, totalCost } }
     }),
+
+  updateBom: (items, totalCost, projectName, description) =>
+    set((state) => {
+      if (!state.project) return state
+      const parts = items.map((item, i) => ({
+        id: `part-${Date.now()}-${i}`,
+        name: item.name,
+        category: item.category,
+        model: item.model ?? item.name,
+        description: item.description ?? '',
+        qty: item.qty,
+        unitCost: item.unitCost ?? 0,
+      }))
+      return {
+        project: {
+          ...state.project,
+          name: projectName ?? state.project.name,
+          description: description ?? state.project.description,
+          parts,
+          totalCost,
+          updatedAt: new Date().toISOString(),
+        },
+      }
+    }),
+
+  saveProject: async () => {
+    const { project } = get()
+    if (!project) return { success: false, error: 'No project to save' }
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': 'demo-user' },
+        body: JSON.stringify({
+          name: project.name,
+          description: project.description,
+          parts: project.parts,
+          wiring_nodes: project.wiringNodes ?? [],
+          wiring_edges: project.wiringEdges ?? [],
+          instructions: project.instructions ?? [],
+          image_url: project.imageUrl,
+          total_cost: project.totalCost,
+          status: project.status,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        return { success: false, error: err.error ?? 'Save failed' }
+      }
+
+      const updated = await res.json()
+      // Merge updated fields back (especially updated_at)
+      set((state) => ({
+        project: state.project
+          ? { ...state.project, updatedAt: updated.updated_at ?? new Date().toISOString() }
+          : null,
+      }))
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  },
+
+  loadProject: async (id: string) => {
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        headers: { 'x-user-id': 'demo-user' },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        return { success: false, error: err.error ?? 'Load failed' }
+      }
+      const data = await res.json()
+      const project: Project = {
+        id: data.id,
+        name: data.name,
+        description: data.description ?? '',
+        parts: data.parts ?? [],
+        totalCost: data.total_cost ?? 0,
+        status: data.status ?? 'draft',
+        author: data.author ?? 'unknown',
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        wiringNodes: data.wiring_nodes ?? [],
+        wiringEdges: data.wiring_edges ?? [],
+        instructions: data.instructions ?? [],
+        imageUrl: data.image_url ?? undefined,
+      }
+      set({ project })
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  },
 }))

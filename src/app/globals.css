@@ -22,6 +22,11 @@
     --c-g950: #09090b;
     --c-accent: #22c55e;
     --c-accent-hover: #4ade80;
+    /* Supplier colors */
+    --c-lcsc: #ff6b35;
+    --c-ali: #ff8c00;
+    --c-jd: #e1251b;
+    --c-hqbuy: #00b0f0;
     --c-input-bg: #222226;
     --c-scrollbar-track: #18181b;
     --c-scrollbar-thumb: #3f3f46;
