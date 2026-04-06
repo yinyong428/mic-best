@@ -100,7 +100,7 @@ export default function ChatPanel() {
               useChatStore.setState((state) => ({
                 messages: state.messages.map((m) =>
                   m.id === aiMsgId
-                    ? { ...m, content: `**Thinking:** ${fullThinking.slice(-200)}` }
+                    ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
                     : m
                 ),
               }))
@@ -141,7 +141,15 @@ export default function ChatPanel() {
               // Update store (live)
               updateBom(items, result.totalCost ?? 0, result.projectName, result.description)
 
-              const summary = `✅ **${result.projectName}**\n${result.description}\n\n📦 ${items.length} 个元件 · 合计 ¥${result.totalCost}\n\n提示：切换到 BOM 标签页查看完整清单。`
+              const summary = `💡 **设计思路**
+${result.reasoning}
+
+✅ **${result.projectName}**
+${result.description}
+
+📦 ${items.length} 个元件 · 合计 ¥${result.totalCost}
+
+切换到 **BOM 标签页** 查看完整清单，可直接链接到 LCSC/1688/京东/华强北 采购。`
 
               useChatStore.setState((state) => ({
                 messages: state.messages.map((m) =>
