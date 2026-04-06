@@ -85,6 +85,16 @@ export const useBOMStore = create<BOMStore>((set) => ({
               }
               if (bomResult) {
                 set({ phase: 'done', result: bomResult, progress: chunk.progress ?? '' })
+                // Write to localStorage so project page can read it
+                try {
+                  localStorage.setItem('mic_best_last_project', JSON.stringify({
+                    bomResult,
+                    projectName: bomResult.projectName ?? description,
+                    description: bomResult.description ?? '',
+                    imageUrl: '',
+                    savedAt: Date.now(),
+                  }))
+                } catch {}
                 triggerImageGen(bomResult.description ?? description, bomResult.projectName ?? '')
               }
             } else if (chunk.phase === 'error') {

@@ -129,13 +129,15 @@ export default function ChatPanel() {
                 hqPartNumber: item.hqPartNumber ?? '',
               }))
 
-              // Persist to localStorage
+              // Persist to localStorage with fresh result only, no merge
+              const timestamp = Date.now()
               try {
-                const saved = JSON.parse(localStorage.getItem('mic_best_last_project') ?? '{}')
                 localStorage.setItem('mic_best_last_project', JSON.stringify({
-                  ...saved,
                   bomResult: result,
                   projectName: result.projectName ?? description,
+                  description: result.description ?? '',
+                  imageUrl: '',
+                  savedAt: timestamp,
                 }))
               } catch {}
 

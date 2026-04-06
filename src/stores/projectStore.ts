@@ -79,7 +79,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   updateBom: (items, totalCost, projectName, description) =>
     set((state) => {
-      if (!state.project) return state
       const parts = items.map((item, i) => ({
         id: `part-${Date.now()}-${i}`,
         name: item.name,
@@ -89,13 +88,17 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         qty: item.qty,
         unitCost: item.unitCost ?? 0,
       }))
+      // Always replace — don't merge with stale project data
       return {
         project: {
-          ...state.project,
-          name: projectName ?? state.project.name,
-          description: description ?? state.project.description,
+          id: `project-${Date.now()}`,
+          name: projectName ?? 'Untitled',
+          description: description ?? '',
           parts,
           totalCost,
+          status: 'draft' as const,
+          author: 'olly',
+          createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
       }
