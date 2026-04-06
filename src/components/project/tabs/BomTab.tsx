@@ -79,6 +79,44 @@ function PartImage({ part }: PartImageProps) {
 export default function BomTab() {
   const { project, bomFilter, setBomFilter, bomView, setBomView } = useProjectStore()
   const [partSearch, setPartSearch] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  function exportCSV() {
+    if (!project) return
+    const rows = [['Name', 'Category', 'Qty', 'Unit Price (RMB)', 'Total (RMB)', 'LCSC ID', 'Model/Part Number', 'Description']]
+    project.parts.forEach((p) => {
+      rows.push([
+        p.name,
+        p.category,
+        String(p.qty),
+        String(p.unitCost),
+        String((p.unitCost * p.qty).toFixed(2)),
+        p.lcscId || '',
+        p.model,
+        p.description || '',
+      ])
+    })
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.name.replace(/\s+/g, '_')}_BOM.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function copyPartNumbers() {
+    if (!project) return
+    const lines = project.parts.map((p) =>
+      p.lcscId ? `LCSC: ${p.lcscId} | ${p.name} | ×${p.qty} | ¥${p.unitCost}` : `${p.name} | ×${p.qty} | ¥${p.unitCost}`
+    )
+    const text = `【${project.name}】采购清单\n合计：${project.parts.length}个元件，¥${project.totalCost.toFixed(2)}\n\n${lines.join('\n')}`
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   if (!project) return <div className="p-8 text-[var(--c-g600)]">Loading...</div>
 
@@ -148,6 +186,19 @@ export default function BomTab() {
                   Cards
                 </button>
               </div>
+              {/* Export buttons */}
+              <button
+                onClick={copyPartNumbers}
+                className="px-3 py-1.5 text-[10px] font-bold border border-[var(--c-lcsc)] text-[var(--c-lcsc)] rounded-lg hover:bg-[var(--c-lcsc)]/10 transition-colors"
+              >
+                {copied ? '✓ 已复制' : '📋 复制清单'}
+              </button>
+              <button
+                onClick={exportCSV}
+                className="px-3 py-1.5 text-[10px] font-bold border border-[var(--c-g700)] text-[var(--c-g400)] rounded-lg hover:bg-[var(--c-g800)] transition-colors"
+              >
+                ↓ CSV
+              </button>
               <span className="text-xs text-[var(--c-g500)]">
                 <span className="font-medium text-white">{project.parts.length} items</span>
                 <span className="mx-1">·</span>
