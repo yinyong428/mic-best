@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabaseClient } from '@/lib/supabase'
 import { communityProjects } from '@/lib/mockData'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/community — list public community projects
 export async function GET() {
-  // Try Supabase first
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
+  const client = getSupabaseClient()
+  if (client) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('community_projects')
         .select('*')
         .order('star_count', { ascending: false })

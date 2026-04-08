@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,11 +8,15 @@ export async function GET(req: NextRequest) {
   const userId = req.headers.get('x-user-id')
 
   if (!userId) {
-    // Return mock data for unauthenticated requests (dev mode)
     return NextResponse.json([])
   }
 
-  const { data, error } = await supabase
+  const client = createServerClient()
+  if (!client) {
+    return NextResponse.json([])
+  }
+
+  const { data, error } = await client
     .from('projects')
     .select('*')
     .eq('user_id', userId)
@@ -33,10 +37,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const client = createServerClient()
+  if (!client) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+
   const body = await req.json()
   const { name, description, parts, image_url, total_cost } = body
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('projects')
     .insert({
       user_id: userId,

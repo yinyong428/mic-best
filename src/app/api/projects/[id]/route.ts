@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,8 +10,13 @@ export async function GET(
 ) {
   const { id } = await params
   const userId = req.headers.get('x-user-id')
+  const client = createServerClient()
 
-  const { data, error } = await supabase
+  if (!client) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+
+  const { data, error } = await client
     .from('projects')
     .select('*')
     .eq('id', id)
@@ -40,10 +45,15 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const client = createServerClient()
+  if (!client) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+
   const body = await req.json()
 
   // Only allow updating own projects
-  const { data: existing } = await supabase
+  const { data: existing } = await client
     .from('projects')
     .select('user_id')
     .eq('id', id)
@@ -62,7 +72,7 @@ export async function PATCH(
     if (field in body) updates[field] = body[field]
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('projects')
     .update(updates)
     .eq('id', id)
@@ -88,7 +98,12 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: existing } = await supabase
+  const client = createServerClient()
+  if (!client) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+
+  const { data: existing } = await client
     .from('projects')
     .select('user_id')
     .eq('id', id)
@@ -98,7 +113,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { error } = await supabase.from('projects').delete().eq('id', id)
+  const { error } = await client.from('projects').delete().eq('id', id)
 
   if (error) {
     console.error('[projects DELETE]', error)

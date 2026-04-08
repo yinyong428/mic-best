@@ -3,7 +3,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 // Lazy-initialized client to avoid build-time errors when env vars are placeholders
 let _supabase: SupabaseClient | null = null
 
-export function getSupabase(): SupabaseClient | null {
+export function getSupabaseClient(): SupabaseClient | null {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -18,11 +18,13 @@ export function getSupabase(): SupabaseClient | null {
   return _supabase
 }
 
+// Proxy object: supabase.client returns the actual client (or null)
+// This lets client code do: if (supabase.client) { ... }
 export const supabase = {
   get client() {
-    return getSupabase()
+    return getSupabaseClient()
   },
-} as unknown as SupabaseClient
+}
 
 // Server-side client with service role (for admin operations)
 export function createServerClient(): SupabaseClient | null {

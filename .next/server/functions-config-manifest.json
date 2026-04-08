@@ -1,1 +1,10 @@
-{"version":1,"functions":{}}
+{
+  "version": 1,
+  "functions": {
+    "/api/bom/stream": {},
+    "/api/lcsc": {},
+    "/api/paddle/webhook": {},
+    "/api/stripe/checkout": {},
+    "/api/stripe/webhook": {}
+  }
+}

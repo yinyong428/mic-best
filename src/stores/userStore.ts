@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
+import { supabase } from '@/lib/supabase'
 
 interface UserStore {
   user: User | null
@@ -8,9 +9,11 @@ interface UserStore {
 
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signup: (email: string, password: string, username: string) => Promise<{ success: boolean; error?: string }>
-  logout: () => void
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>
+  logout: () => Promise<void>
   updateCredits: (credits: number) => void
   setUser: (user: User) => void
+  fetchProfile: (userId: string) => Promise<void>
 }
 
 export const useUserStore = create<UserStore>()(
@@ -19,50 +22,91 @@ export const useUserStore = create<UserStore>()(
       user: null,
       isLoading: false,
 
-      login: async (email: string, _password: string) => {
+      login: async (email: string, password: string) => {
         set({ isLoading: true })
-        await new Promise((r) => setTimeout(r, 600))
-        const mockUsers: Record<string, User> = {
-          'olly@example.com': {
-            id: 'user-1',
-            email: 'olly@example.com',
-            username: 'olly',
-            credits: 8,
-            plan: 'pro',
-          },
+        const client = supabase.client
+        if (!client) {
+          set({ isLoading: false })
+          return { success: false, error: 'Supabase not configured' }
         }
-        const user = mockUsers[email.toLowerCase()]
-        if (user) {
+
+        const { data, error } = await client.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (error) {
+          set({ isLoading: false })
+          return { success: false, error: error.message }
+        }
+
+        if (data.user) {
+          // Fetch profile
+          const { data: profile } = await client
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single()
+
+          const user: User = {
+            id: data.user.id,
+            email: data.user.email ?? email,
+            username: profile?.nickname ?? email.split('@')[0],
+            credits: profile?.credits ?? 5,
+            plan: profile?.plan ?? 'free',
+          }
           set({ user, isLoading: false })
           return { success: true }
         }
-        // Auto-create for demo
-        const newUser: User = {
-          id: `user-${Date.now()}`,
-          email,
-          username: email.split('@')[0],
-          credits: 5,
-          plan: 'free',
-        }
-        set({ user: newUser, isLoading: false })
-        return { success: true }
+
+        set({ isLoading: false })
+        return { success: false, error: 'Login failed' }
       },
 
-      signup: async (email: string, _password: string, username: string) => {
+      signup: async (email: string, password: string, username: string) => {
         set({ isLoading: true })
-        await new Promise((r) => setTimeout(r, 800))
-        const newUser: User = {
-          id: `user-${Date.now()}`,
-          email,
-          username: username || email.split('@')[0],
-          credits: 5,
-          plan: 'free',
+        const client = supabase.client
+        if (!client) {
+          set({ isLoading: false })
+          return { success: false, error: 'Supabase not configured' }
         }
-        set({ user: newUser, isLoading: false })
-        return { success: true }
+
+        const { data, error } = await client.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { nickname: username },
+          },
+        })
+
+        if (error) {
+          set({ isLoading: false })
+          return { success: false, error: error.message }
+        }
+
+        if (data.user) {
+          const user: User = {
+            id: data.user.id,
+            email: data.user.email ?? email,
+            username: username || email.split('@')[0],
+            credits: 5,
+            plan: 'free',
+          }
+          set({ user, isLoading: false })
+          return { success: true }
+        }
+
+        set({ isLoading: false })
+        return { success: false, error: 'Signup failed' }
       },
 
-      logout: () => set({ user: null }),
+      logout: async () => {
+        const client = supabase.client
+        if (client) {
+          await client.auth.signOut()
+        }
+        set({ user: null })
+      },
 
       updateCredits: (credits: number) =>
         set((state) => ({
@@ -70,6 +114,54 @@ export const useUserStore = create<UserStore>()(
         })),
 
       setUser: (user: User) => set({ user }),
+
+      fetchProfile: async (userId: string) => {
+        const client = supabase.client
+        if (!client) return
+
+        const { data: profile } = await client
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single()
+
+        if (profile) {
+          set((state) => ({
+            user: state.user
+              ? {
+                  ...state.user,
+                  username: profile.nickname ?? state.user.username,
+                  credits: profile.credits ?? state.user.credits,
+                  plan: profile.plan ?? state.user.plan,
+                }
+              : null,
+          }))
+        }
+      },
+
+      loginWithGoogle: async () => {
+        set({ isLoading: true })
+        const client = supabase.client
+        if (!client) {
+          set({ isLoading: false })
+          return { success: false, error: 'Supabase not configured' }
+        }
+
+        const { error } = await client.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+          },
+        })
+
+        if (error) {
+          set({ isLoading: false })
+          return { success: false, error: error.message }
+        }
+
+        // Redirect happens automatically
+        return { success: true }
+      },
     }),
     {
       name: 'mic-user-storage',
