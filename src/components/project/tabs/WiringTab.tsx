@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
@@ -157,61 +157,133 @@ function generateWiring(parts: WiringPart[]): { nodes: Node[]; edges: Edge[] } {
 export default function WiringTab() {
   const { project, saveProject } = useProjectStore()
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [isDirty, setIsDirty] = useState(false)
 
   const wiringParts = useMemo(
     () => buildWiringParts(project?.parts ?? []),
     [project?.parts]
   )
 
-  // Use saved wiring nodes/edges if available, otherwise auto-generate
-  const initial = useMemo(() => {
+  // Saved data from project store
+  const savedData = useMemo(() => {
     if (project?.wiringNodes && project.wiringNodes.length > 0) {
       return {
         nodes: project.wiringNodes as unknown as Node[],
         edges: (project.wiringEdges ?? []) as unknown as Edge[],
       }
     }
-    return generateWiring(wiringParts)
-  }, [project?.wiringNodes, project?.wiringEdges, wiringParts])
+    return null
+  }, [project?.wiringNodes, project?.wiringEdges])
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes as unknown as Node[])
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges)
+  // Initial state: use saved positions if available, otherwise auto-generate
+  const initialState = useMemo(() => {
+    return savedData ?? generateWiring(wiringParts)
+  }, [savedData, wiringParts])
 
-  const onConnect = useCallback(
-    (params: Connection) =>
-      setEdges((eds) =>
-        addEdge(
-          { ...params, animated: true, style: { strokeWidth: 2, opacity: 0.7 } },
-          eds
-        )
-      ),
-    [setEdges]
-  )
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialState.nodes as unknown as Node[])
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialState.edges)
 
-  const handleSave = async () => {
-    setSaveStatus('saving')
-    // Update project store with current wiring state
-    const currentNodes = nodes as unknown as import('@/types').WiringNode[]
-    const currentEdges = edges as unknown as import('@/types').WiringEdge[]
+  // Sync when project wiring data loads (e.g. after page reload)
+  // useNodesState only uses initialState on mount; we need to update when store changes
+  const lastProjectUpdatedAt = useRef(project?.updatedAt)
+  useEffect(() => {
+    if (!project?.updatedAt || project.updatedAt === lastProjectUpdatedAt.current) return
+    lastProjectUpdatedAt.current = project.updatedAt
+
+    if (savedData && !isDirty) {
+      // Project loaded from server — use saved positions
+      setNodes(savedData.nodes as unknown as Node[])
+      setEdges(savedData.edges as unknown as Edge[])
+    }
+  }, [project?.updatedAt, savedData, isDirty])
+
+  // Debounced auto-persist node positions to store (not to API)
+  const autoPersistRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const syncPositionsToStore = useCallback(() => {
     useProjectStore.setState((state) => {
       if (!state.project) return state
       return {
         project: {
           ...state.project,
-          wiringNodes: currentNodes,
-          wiringEdges: currentEdges,
+          wiringNodes: nodes as unknown as any[],
+          wiringEdges: edges as unknown as any[],
         },
       }
     })
+  }, [nodes, edges])
+
+  const onConnect = useCallback(
+    (params: Connection) => {
+      setEdges((eds) =>
+        addEdge(
+          { ...params, animated: true, style: { strokeWidth: 2, opacity: 0.7 } },
+          eds
+        )
+      )
+      setIsDirty(true)
+      // Persist positions and connections to store (API persist is manual)
+      syncPositionsToStore()
+    },
+    [setEdges, syncPositionsToStore]
+  )
+
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChange>[0]) => {
+      onNodesChange(changes)
+
+      // Detect position changes (drag end = 'position' change with drag=true)
+      const hasPositionChange = changes.some(
+        (c) => c.type === 'position' && c.dragging === false
+      )
+      if (hasPositionChange) {
+        setIsDirty(true)
+        // Debounce store sync — don't write on every pixel of drag, only on drag end
+        if (autoPersistRef.current) clearTimeout(autoPersistRef.current)
+        autoPersistRef.current = setTimeout(() => {
+          syncPositionsToStore()
+        }, 300)
+      }
+    },
+    [onNodesChange, syncPositionsToStore]
+  )
+
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChange>[0]) => {
+      onEdgesChange(changes)
+      const hasConnectionChange = changes.some(
+        (c) => c.type === 'add' || c.type === 'remove'
+      )
+      if (hasConnectionChange) {
+        setIsDirty(true)
+        syncPositionsToStore()
+      }
+    },
+    [onEdgesChange, syncPositionsToStore]
+  )
+
+  const handleSave = async () => {
+    setSaveStatus('saving')
+
+    // Ensure latest positions are in store before save
+    syncPositionsToStore()
+
     const result = await saveProject()
     setSaveStatus(result.success ? 'saved' : 'error')
+    if (result.success) setIsDirty(false)
     setTimeout(() => setSaveStatus('idle'), 2000)
   }
 
   return (
     <div className="h-full w-full relative">
-      {/* Save toolbar */}
+      {/* Toolbar */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+        {isDirty && (
+          <span className="text-[10px] text-[var(--c-g500)] italic flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--c-accent)] animate-pulse" />
+            未保存
+          </span>
+        )}
         <button
           onClick={handleSave}
           disabled={saveStatus === 'saving'}
@@ -235,8 +307,8 @@ export default function WiringTab() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         fitView
@@ -274,6 +346,11 @@ export default function WiringTab() {
           <div className="w-8 h-0.5 bg-[var(--c-g500)] rounded" />
           <span className="text-xs text-[var(--c-g500)]">接线连接</span>
         </div>
+      </div>
+
+      {/* Tip */}
+      <div className="absolute bottom-4 right-4 bg-[#0a0a0f]/80 border border-[#2a2a3e] rounded-lg px-3 py-2 text-[10px] text-[var(--c-g600)]">
+        拖拽节点可调整位置 · 拖出连线到另一节点可新建连接
       </div>
     </div>
   )
