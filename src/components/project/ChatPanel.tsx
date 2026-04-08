@@ -181,11 +181,14 @@ export default function ChatPanel() {
           }
 
           if (chunk.phase === 'parsing') {
-            capturedThinking = fullThinking
-            setThinking(chunk.progress ?? '正在解析…')
+            capturedThinking = fullThinking  // snapshot full thinking before it disappears
+            // Clear thinking div (thinking done, don't show partial content)
+            setThinking('')
             useChatStore.setState((state) => ({
               messages: state.messages.map((m) =>
-                m.id === aiMsgId ? { ...m, content: chunk.progress ?? '正在解析…' } : m
+                m.id === aiMsgId
+                  ? { ...m, content: `💡 思考完成\n${capturedThinking}\n\n⏳ 正在解析 BOM…` }
+                  : m
               ),
             }))
           }
