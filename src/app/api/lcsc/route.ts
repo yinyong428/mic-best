@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const parts: LCSCPart[] = searchLCSC(query, category)
+    const parts: LCSCPart[] = await searchLCSC(query, category)
 
     return NextResponse.json({
       success: true,

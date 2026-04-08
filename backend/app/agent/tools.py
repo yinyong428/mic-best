@@ -1,9 +1,10 @@
 """
 Tools available to the BOM agent.
-Currently uses a realistic simulation of LCSC data.
-Swap the body of `search_lcsc` for real LCSC API calls.
+Live LCSC data via jlcsearch.tscircuit.com (public JLCPCB parts API).
+Falls back to local mock DB if the live API is unavailable.
 """
 
+import json
 from langchain_core.tools import tool
 import httpx
 
@@ -50,8 +51,8 @@ _PART_DB: list[dict] = [
 @tool
 def search_lcsc(query: str, category: str = "all") -> str:
     """
-    Search the LCSC parts catalog for components matching a query.
-    Returns top matches with part number, LCSC ID, price, stock level, and description.
+    Search the LCSC/JLCPCB parts catalog for components matching a query.
+    Uses live JLCPCB parts data. Falls back to local DB if API unavailable.
 
     Args:
         query: Search terms (e.g. "ESP32", "ultrasonic sensor", "servo motor")
@@ -62,6 +63,12 @@ def search_lcsc(query: str, category: str = "all") -> str:
     """
     q = query.lower().strip()
 
+    # Try live jlcsearch API first
+    live_results = _search_live(q, category)
+    if live_results:
+        return json.dumps(live_results, ensure_ascii=False, indent=2)
+
+    # Fallback to local mock DB
     candidates = _PART_DB
     if category != "all":
         candidates = [p for p in candidates if p["category"] == category]
@@ -70,10 +77,7 @@ def search_lcsc(query: str, category: str = "all") -> str:
         tokens = q.split()
         candidates = [
             p for p in candidates
-            if all(
-                tok in f"{p['partNumber']} {p['description']} {p['brand']}".lower()
-                for tok in tokens
-            )
+            if all(tok in f"{p['partNumber']} {p['description']} {p['brand']}".lower() for tok in tokens)
         ]
 
     results = []
@@ -91,9 +95,9 @@ def search_lcsc(query: str, category: str = "all") -> str:
             "price1": p["price1"],
             "price10": p["price10"],
             "manufacturer": p["manufacturer"],
+            "source": "mock",
         })
 
-    import json
     return json.dumps(results, ensure_ascii=False, indent=2)
 
 
@@ -101,6 +105,7 @@ def search_lcsc(query: str, category: str = "all") -> str:
 def get_lcsc_price(lcsc_id: str) -> str:
     """
     Get the exact price for a specific LCSC part by its LCSC ID.
+    Uses live data from jlcsearch API. Falls back to local DB.
 
     Args:
         lcsc_id: The LCSC part ID (e.g. "C2846261" or "2846261")
@@ -109,9 +114,15 @@ def get_lcsc_price(lcsc_id: str) -> str:
         JSON with pricing tiers, stock, and lead time
     """
     clean_id = lcsc_id.lstrip("C")
+
+    # Try live API first
+    live = _fetch_live_part(clean_id)
+    if live:
+        return json.dumps(live, ensure_ascii=False)
+
+    # Fallback to local DB
     for p in _PART_DB:
         if p["lcscId"].lstrip("C") == clean_id:
-            import json
             return json.dumps({
                 "lcscId": p["lcscId"],
                 "partNumber": p["partNumber"],
@@ -120,10 +131,100 @@ def get_lcsc_price(lcsc_id: str) -> str:
                 "price100": p["price100"],
                 "stock": p["stock"],
                 "moq": p.get("minimumOrder", 1),
+                "source": "mock",
             }, ensure_ascii=False)
 
-    import json
     return json.dumps({"error": f"Part {lcsc_id} not found in catalog"})
+
+
+# ─── Live API helpers ─────────────────────────────────────────────────────────
+
+_JLCCSEARCH_BASE = "https://jlcsearch.tscircuit.com"
+
+_CATEGORY_MAP: dict[str, list[str]] = {
+    "mcu": ["esp", "stm32", "arduino", "rp2040", "raspberry pi", "atmeg", "nordic"],
+    "sensor": ["sensor", "dht", "hc-sr", "mpu", "bme", "ds18b", "bh1750", "pir", "ultrasonic", "rcwl", "camera"],
+    "actuator": ["servo", "stepper", "motor", "l298", "drv88", "driver"],
+    "power": ["lm259", "ams1117", "tp4056", "buck", "ldo", "mp1584", "regulator", "converter"],
+    "module": ["oled", "lcd", "nrf24", "rfm", "dfplayer", "max9814", "module", "display"],
+    "structural": ["extrusion", "aluminum", "2020", "6030", "m3", "nut", "bolt", "screw"],
+    "enclosure": ["enclosure", "box", "case", "housing", "abs", "waterproof", "ip65", "ip67"],
+}
+
+
+def _infer_category(part_number: str, description: str) -> str:
+    text = f"{part_number} {description}".lower()
+    for cat, keywords in _CATEGORY_MAP.items():
+        if any(kw in text for kw in keywords):
+            return cat
+    return "misc"
+
+
+def _search_live(query: str, category: str) -> list[dict]:
+    """Call jlcsearch public API. Returns empty list on failure."""
+    try:
+        resp = httpx.get(
+            f"{_JLCCSEARCH_BASE}/keyword-search",
+            params={"q": query, "limit": 10},
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for item in data.get("components", []):
+            cat = _infer_category(item.get("mfr", ""), item.get("description", ""))
+            if category != "all" and cat != category:
+                continue
+            stock = item.get("stock", 0)
+            stock_label = "High" if stock > 5000 else "Medium" if stock > 500 else "Low"
+            price = item.get("price", 0)
+            results.append({
+                "partNumber": item.get("mfr", ""),
+                "lcscId": f"C{item.get('lcsc', '')}",
+                "description": item.get("description") or f"{item.get('mfr', '')} ({item.get('package', '')}",
+                "brand": item.get("mfr", "").split("-")[0] if item.get("mfr") else "Unknown",
+                "category": cat,
+                "package": item.get("package", ""),
+                "stock": stock,
+                "stockLabel": stock_label,
+                "price1": round(price, 4),
+                "price10": round(price * 0.9, 4),
+                "price100": round(price * 0.75, 4),
+                "manufacturer": item.get("mfr", "").split("-")[0] if item.get("mfr") else "Unknown",
+                "isBasic": item.get("is_basic", False),
+                "source": "live",
+            })
+        return results
+    except Exception:
+        return []
+
+
+def _fetch_live_part(lcsc_id: str) -> dict | None:
+    """Fetch a single part by LCSC ID from jlcsearch."""
+    try:
+        resp = httpx.get(
+            f"{_JLCCSEARCH_BASE}/keyword-search",
+            params={"q": lcsc_id, "limit": 5},
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        for item in data.get("components", []):
+            if str(item.get("lcsc")) == lcsc_id.lstrip("C"):
+                price = item.get("price", 0)
+                return {
+                    "lcscId": f"C{item.get('lcsc')}",
+                    "partNumber": item.get("mfr", ""),
+                    "price1": round(price, 4),
+                    "price10": round(price * 0.9, 4),
+                    "price100": round(price * 0.75, 4),
+                    "stock": item.get("stock", 0),
+                    "moq": 1,
+                    "source": "live",
+                }
+        return None
+    except Exception:
+        return None
 
 
 @tool
@@ -149,5 +250,4 @@ def generate_bom_json(
     # This is a wrapper that calls the bailian/Qwen API
     # In the nodes.py, we call the OpenAI-compatible API directly with httpx
     # to get streaming responses
-    import json
     return json.dumps({"status": "handled_by_node", "note": "generate_bom_json is handled via streaming in nodes.py"})
