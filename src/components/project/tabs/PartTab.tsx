@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useRef, useMemo, useCallback } from 'react'
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 import { useProjectStore } from '@/stores/projectStore'
 import { getCategoryColor, getCategoryLabel } from '@/lib/mockData'
 import { streamGenerateBOM, type StreamingChunk, type BOMItem } from '@/lib/bailian'
 import type { LCSCPart } from '@/lib/lcsc'
+import PartViewer3D from '@/components/project/PartViewer3D'
+import type { Part } from '@/types'
 
 export default function PartTab() {
   const { project, setProject } = useProjectStore()
@@ -12,6 +14,14 @@ export default function PartTab() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null)
+  const [viewerPart, setViewerPart] = useState<Part | null>(null)
+
+  // Close viewer on ESC
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewerPart(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Search mode: 'ai' | 'lcsc'
   const [searchMode, setSearchMode] = useState<'ai' | 'lcsc'>('ai')
@@ -547,6 +557,12 @@ export default function PartTab() {
                           Search on Amazon
                         </a>
                       )}
+                      <button
+                        onClick={() => setViewerPart(part)}
+                        className="text-[10px] text-[var(--c-accent)] hover:text-[var(--c-accent)]/80 underline text-left"
+                      >
+                        View 3D
+                      </button>
                     </div>
                   </td>
                   <td className="p-3 text-right font-bold text-white">${(part.unitCost * part.qty).toFixed(2)}</td>
@@ -592,18 +608,26 @@ export default function PartTab() {
                     <span className="text-[var(--c-g700)] mx-1">·</span>
                     <span className="font-bold text-white">${(part.unitCost * part.qty).toFixed(2)}</span>
                   </div>
-                  {part.lcscId ? (
-                    <a
-                      href={`https://www.lcsc.com/product-detail/${part.lcscId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-[#22c55e] hover:text-[#22c55e]/80 underline"
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setViewerPart(part)}
+                      className="text-[10px] px-2 py-1 bg-[var(--c-g800)] hover:bg-[var(--c-g700)] text-[var(--c-g400)] rounded transition-colors"
                     >
-                      LCSC →
-                    </a>
-                  ) : (
-                    <button className="text-[10px] text-blue-400 hover:text-blue-300">Research →</button>
-                  )}
+                      View 3D
+                    </button>
+                    {part.lcscId ? (
+                      <a
+                        href={`https://www.lcsc.com/product-detail/${part.lcscId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] px-2 py-1 bg-[#22c55e]/15 hover:bg-[#22c55e]/25 text-[#22c55e] rounded transition-colors"
+                      >
+                        LCSC →
+                      </a>
+                    ) : (
+                      <button className="text-[10px] text-blue-400 hover:text-blue-300">Research →</button>
+                    )}
+                  </div>
                 </div>
                 {part.printSpecs && (
                   <div className="mt-2 pt-2 border-t border-[var(--c-g800)] text-[10px] text-[var(--c-g600)]">
@@ -615,6 +639,11 @@ export default function PartTab() {
           </div>
         )}
       </div>
+
+      {/* 3D Part Viewer Modal */}
+      {viewerPart && (
+        <PartViewer3D part={viewerPart} onClose={() => setViewerPart(null)} />
+      )}
     </div>
   )
 }
