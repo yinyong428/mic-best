@@ -225,20 +225,21 @@ async function streamBOM(
           fullText += token
 
           if (!thinkingDone) {
-            // Only emit thinking if there's non-JSON content.
-            // Wait for {" — the actual JSON object start — not a lone {
-            const jsonMarkerIdx = fullText.indexOf('{"')
-
-            if (jsonMarkerIdx !== -1) {
-              // JSON object has started — emit thinking content up to the marker
-              const thinkingText = fullText.slice(0, jsonMarkerIdx)
-              if (thinkingText) {
-                onChunk({ phase: 'thinking', thinking: thinkingText })
+            // Scan backwards through accumulated thinking for trailing JSON object
+            // marker "{ followed by a quote — this is the actual boundary
+            // between thinking text and JSON, not part of normal thinking content.
+            const lastJsonMarkerIdx = fullText.lastIndexOf('{"')
+            if (lastJsonMarkerIdx > 1) {
+              // Thinking text = everything BEFORE the trailing {\".
+              // The \" after { confirms this is a real JSON object, not thinking text.
+              const thinkingText = fullText.slice(0, lastJsonMarkerIdx)
+              if (thinkingText.trim()) {
+                onChunk({ phase: 'thinking', thinking: thinkingText.trimEnd() })
               }
               thinkingDone = true
               onChunk({ phase: 'parsing', progress: '正在解析 BOM…' })
             }
-            // else: token is part of thinking text, accumulate silently
+            // else: still in pure thinking — keep accumulating
           }
         } catch {
           // Skip malformed lines
