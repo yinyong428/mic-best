@@ -2,6 +2,7 @@
   "version": 1,
   "functions": {
     "/api/bom/stream": {},
+    "/api/instructions/stream": {},
     "/api/lcsc": {},
     "/api/paddle/webhook": {},
     "/api/stripe/checkout": {},

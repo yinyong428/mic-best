@@ -19,6 +19,7 @@
   "/api/community/route": "/api/community",
   "/api/debug/route": "/api/debug",
   "/api/image/route": "/api/image",
+  "/api/instructions/stream/route": "/api/instructions/stream",
   "/api/lcsc/route": "/api/lcsc",
   "/api/paddle/webhook/route": "/api/paddle/webhook",
   "/api/projects/[id]/route": "/api/projects/[id]",

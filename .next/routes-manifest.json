@@ -186,6 +186,12 @@
       "namedRegex": "^/api/image(?:/)?$"
     },
     {
+      "page": "/api/instructions/stream",
+      "regex": "^/api/instructions/stream(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/instructions/stream(?:/)?$"
+    },
+    {
       "page": "/api/lcsc",
       "regex": "^/api/lcsc(?:/)?$",
       "routeKeys": {},

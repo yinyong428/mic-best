@@ -1,34 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useProjectStore } from '@/stores/projectStore'
 import { getCategoryColor } from '@/lib/mockData'
-
-interface PhaseStep {
-  id: string
-  title: string
-  description: string
-  partIds: string[]
-  tools: string[]
-}
+import type { StreamingChunk, InstructionResult } from '@/lib/instructions'
+import type { Instruction } from '@/types'
 
 interface Phase {
   id: string
   name: string
   icon: string
-  steps: PhaseStep[]
+  steps: {
+    id: string
+    step: number
+    title: string
+    description: string
+    partIds: string[]
+    tools: string[]
+    tips?: string
+  }[]
 }
 
-function autoGeneratePhases(projectName: string, parts: { id: string; name: string; category: string }[]): Phase[] {
-  const electrical = parts.filter(p => ['mcu', 'sensor', 'actuator', 'power', 'module'].includes(p.category))
-  const structural = parts.filter(p => !['mcu', 'sensor', 'actuator', 'power', 'module'].includes(p.category))
-  const mcuParts = electrical.filter(p => p.category === 'mcu')
-  const sensorParts = electrical.filter(p => p.category === 'sensor')
-  const actuatorParts = electrical.filter(p => p.category === 'actuator')
-  const moduleParts = electrical.filter(p => p.category === 'module')
-  const powerParts = electrical.filter(p => p.category === 'power')
+const DEFAULT_TOOLS = [
+  '3D printer (PETG and PLA)',
+  'M4 hex key / Allen wrench',
+  'M3 hex key',
+  'Wire strippers',
+  'Phillips screwdriver',
+  'Multimeter',
+  'Soldering iron (optional)',
+]
 
-  const partsById = (ids: string[]) => ids.map(id => parts.find(p => p.id === id)).filter(Boolean)
+const DEFAULT_ASSUMPTIONS = [
+  'Basic knowledge of microcontroller GPIO',
+  'Raspberry Pi OS can be flashed to SD card',
+  'Familiarity with 3D printing processes',
+  'Safe handling of LiPo batteries',
+]
+
+function autoGeneratePhases(
+  projectName: string,
+  parts: { id: string; name: string; category: string; qty: number }[]
+): Phase[] {
+  const electrical = parts.filter(p =>
+    ['mcu', 'sensor', 'actuator', 'power', 'module'].includes(p.category)
+  )
+  const structural = parts.filter(
+    (p) => !['mcu', 'sensor', 'actuator', 'power', 'module'].includes(p.category)
+  )
+  const mcuParts = electrical.filter((p) => p.category === 'mcu')
+  const sensorParts = electrical.filter((p) => p.category === 'sensor')
+  const actuatorParts = electrical.filter((p) => p.category === 'actuator')
+  const powerParts = electrical.filter((p) => p.category === 'power')
+  const moduleParts = electrical.filter((p) => p.category === 'module')
+
+  const byIds = (ids: string[]) => ids.map((id) => parts.find((p) => p.id === id)).filter(Boolean)
 
   return [
     {
@@ -38,38 +64,11 @@ function autoGeneratePhases(projectName: string, parts: { id: string; name: stri
       steps: [
         {
           id: '1.1',
-          title: 'Print motor mounts and wheel hub adapters',
-          description: `Print ${structural.filter(p => p.name.toLowerCase().includes('mount') || p.name.toLowerCase().includes('hub')).length} parts for motor and wheel attachment. Recommended settings: PLA for brackets, PETG for load-bearing parts.`,
-          partIds: structural.filter(p => p.name.toLowerCase().includes('mount') || p.name.toLowerCase().includes('hub') || p.name.toLowerCase().includes('adapter')).map(p => p.id),
-          tools: ['3D printer', 'PLA filament', 'PETG filament', 'Calipers'],
-        },
-        {
-          id: '1.2',
-          title: 'Print sensor and motor driver mounts',
-          description: 'Print mounting brackets for sensors and the motor driver. Ensure good ventilation during printing.',
-          partIds: structural.filter(p => p.name.toLowerCase().includes('sensor') || p.name.toLowerCase().includes('driver')).map(p => p.id),
-          tools: ['3D printer', 'PLA filament'],
-        },
-        {
-          id: '1.3',
-          title: 'Print battery holder and lid mechanism parts',
-          description: 'Print enclosure-related parts including battery holder and any lid/door actuator components.',
-          partIds: structural.filter(p => p.name.toLowerCase().includes('battery') || p.name.toLowerCase().includes('lid') || p.name.toLowerCase().includes('holder')).map(p => p.id),
-          tools: ['3D printer', 'PETG filament'],
-        },
-        {
-          id: '1.4',
-          title: 'Print structural frame and enclosure panels',
-          description: 'Print the main structural components and any external shell or enclosure panels.',
-          partIds: structural.filter(p => p.name.toLowerCase().includes('frame') || p.name.toLowerCase().includes('panel') || p.name.toLowerCase().includes('plate') || p.name.toLowerCase().includes('shell')).map(p => p.id),
-          tools: ['3D printer', 'PLA or PETG', 'Sanding paper'],
-        },
-        {
-          id: '1.5',
-          title: 'Print controller and peripheral mounts',
-          description: 'Print any remaining mounts for the main controller, camera, speaker, or other peripherals.',
-          partIds: structural.filter(p => p.name.toLowerCase().includes('controller') || p.name.toLowerCase().includes('mount') && !p.name.toLowerCase().includes('motor')).map(p => p.id),
-          tools: ['3D printer', 'PLA filament'],
+          step: 1,
+          title: 'Print all 3D printable parts',
+          description: `Print structural parts including mounts, brackets, and enclosure. Recommended: PETG for load-bearing parts, PLA for decorative panels.`,
+          partIds: structural.map((p) => p.id),
+          tools: ['3D printer', 'PLA filament', 'PETG filament'],
         },
       ],
     },
@@ -80,101 +79,39 @@ function autoGeneratePhases(projectName: string, parts: { id: string; name: stri
       steps: [
         {
           id: '2.1',
-          title: `Connect ${powerParts[0]?.name ?? 'Main Power Source'} to Motor Driver and 5V Buck Converter`,
-          description: 'Route power cables from the main battery to the motor driver and voltage regulator. Use appropriate gauge wire for high-current lines.',
-          partIds: [...powerParts.slice(0, 1).map(p => p.id), ...moduleParts.filter(p => p.name.toLowerCase().includes('driver') || p.name.toLowerCase().includes('regulator') || p.name.toLowerCase().includes('buck')).map(p => p.id)],
+          step: 1,
+          title: 'Connect power bus and voltage regulation',
+          description: `Route power from ${powerParts[0]?.name ?? 'battery'} to the buck converter and motor driver. Verify voltage levels before connecting sensitive components.`,
+          partIds: [
+            ...powerParts.slice(0, 1).map((p) => p.id),
+            ...moduleParts
+              .filter((p) => p.name.toLowerCase().includes('driver') || p.name.toLowerCase().includes('buck') || p.name.toLowerCase().includes('regulator'))
+              .map((p) => p.id),
+          ],
           tools: ['Wire strippers', 'Soldering iron', 'Multimeter', 'Heat shrink tubing'],
         },
         {
           id: '2.2',
-          title: 'Connect 5V Buck Converter to Main Controller',
-          description: `Power the ${mcuParts[0]?.name ?? 'Main Controller'} through the 5V regulator. Verify output voltage before connecting.`,
-          partIds: [...moduleParts.filter(p => p.name.toLowerCase().includes('regulator') || p.name.toLowerCase().includes('buck')).map(p => p.id), ...mcuParts.map(p => p.id)],
-          tools: ['Wire strippers', 'Multimeter', 'Connector plugs'],
-        },
-        {
-          id: '2.3',
-          title: 'Wire Motor Driver to Left and Right Drive Motors',
-          description: 'Connect the motor driver outputs to both drive motors. Ensure correct phase wiring (A+/A-/B+/B-) for each motor.',
-          partIds: [...moduleParts.filter(p => p.name.toLowerCase().includes('driver')).map(p => p.id), ...actuatorParts.filter(p => p.name.toLowerCase().includes('motor') || p.name.toLowerCase().includes('nema')).map(p => p.id)],
-          tools: ['Wire strippers', 'Screwdriver', 'Multimeter'],
-        },
-        {
-          id: '2.4',
-          title: 'Connect Main Controller to Motor Driver control pins',
-          description: 'Wire GPIO pins from the controller to the motor driver inputs (IN1-IN4, ENA/ENB). Use PWM pins for speed control.',
-          partIds: [...mcuParts.map(p => p.id), ...moduleParts.filter(p => p.name.toLowerCase().includes('driver')).map(p => p.id)],
+          step: 2,
+          title: `Connect ${mcuParts[0]?.name ?? 'MCU'} to peripherals`,
+          description: `Wire GPIO pins from the ${mcuParts[0]?.name ?? 'MCU'} to sensors and modules. Use appropriate logic voltage levels.`,
+          partIds: [
+            ...mcuParts.map((p) => p.id),
+            ...sensorParts.map((p) => p.id),
+            ...moduleParts.map((p) => p.id),
+          ],
           tools: ['Jumper wires', 'Breadboard', 'Multimeter'],
         },
         {
-          id: '2.5',
-          title: 'Connect Main Controller to Front Ultrasonic Sensor',
-          description: 'Wire the ultrasonic sensor (Trig/Echo) to two GPIO pins on the controller.',
-          partIds: [...mcuParts.map(p => p.id), ...sensorParts.filter(p => p.name.toLowerCase().includes('ultrasonic') || p.name.toLowerCase().includes('hc-sr')).map(p => p.id)],
-          tools: ['Jumper wires', 'Multimeter'],
-        },
-        {
-          id: '2.6',
-          title: 'Connect Main Controller to Lid Actuator Servo and Voice Output Speaker',
-          description: 'Connect the servo signal pin to a PWM GPIO pin. Wire the I2S speaker amplifier to the controller\'s I2S pins.',
-          partIds: [...mcuParts.map(p => p.id), ...actuatorParts.filter(p => p.name.toLowerCase().includes('servo') || p.name.toLowerCase().includes('actuator')).map(p => p.id), ...moduleParts.filter(p => p.name.toLowerCase().includes('speaker') || p.name.toLowerCase().includes('i2s')).map(p => p.id)],
-          tools: ['Jumper wires', 'Screwdriver'],
-        },
-        {
-          id: '2.7',
-          title: 'Connect Main Controller to Vision Camera',
-          description: 'Connect the camera module via CSI ribbon cable to the controller\'s camera port.',
-          partIds: [...mcuParts.map(p => p.id), ...sensorParts.filter(p => p.name.toLowerCase().includes('camera') || p.name.toLowerCase().includes('vision')).map(p => p.id)],
-          tools: ['CSI ribbon cable', 'Soft cloth (for handling)'],
-        },
-      ],
-    },
-    {
-      id: 'bringup',
-      name: 'Bring-up',
-      icon: '🚀',
-      steps: [
-        {
-          id: '3.1',
-          title: 'Power on Raspberry Pi and verify OS boot',
-          description: 'Insert SD card with Raspberry Pi OS, connect power, and verify the system boots without errors.',
-          partIds: mcuParts.filter(p => p.name.toLowerCase().includes('raspberry')).map(p => p.id),
-          tools: ['HDMI monitor', 'USB keyboard', 'SD card reader'],
-        },
-        {
-          id: '3.2',
-          title: 'Install necessary libraries and drivers for attached peripherals',
-          description: 'Run package updates and install required libraries: RPi.GPIO, smbus, picamera2, servo control libraries.',
-          partIds: mcuParts.map(p => p.id),
-          tools: ['Internet connection', 'Terminal access'],
-        },
-        {
-          id: '3.3',
-          title: 'Test Front Ultrasonic Sensor functionality',
-          description: 'Run a simple distance measurement script to verify the HC-SR04 sensor is working correctly.',
-          partIds: sensorParts.filter(p => p.name.toLowerCase().includes('ultrasonic') || p.name.toLowerCase().includes('hc-sr')).map(p => p.id),
-          tools: ['Python test script', 'Multimeter'],
-        },
-        {
-          id: '3.4',
-          title: 'Test Left and Right Drive Motor control via Motor Driver',
-          description: 'Run motor test code to verify both motors spin in correct directions at varying speeds.',
-          partIds: [...moduleParts.filter(p => p.name.toLowerCase().includes('driver')).map(p => p.id), ...actuatorParts.filter(p => p.name.toLowerCase().includes('motor') || p.name.toLowerCase().includes('nema')).map(p => p.id)],
-          tools: ['Python test script', 'Oscilloscope (optional)'],
-        },
-        {
-          id: '3.5',
-          title: 'Test Lid Actuator Servo operation',
-          description: 'Verify the servo sweeps through its full range of motion without binding.',
-          partIds: actuatorParts.filter(p => p.name.toLowerCase().includes('servo') || p.name.toLowerCase().includes('actuator')).map(p => p.id),
-          tools: ['Python test script'],
-        },
-        {
-          id: '3.6',
-          title: 'Verify Vision Camera feed and Voice Output Speaker functionality',
-          description: 'Test camera streaming and audio output to confirm both subsystems are operational.',
-          partIds: [...sensorParts.filter(p => p.name.toLowerCase().includes('camera') || p.name.toLowerCase().includes('vision')).map(p => p.id), ...moduleParts.filter(p => p.name.toLowerCase().includes('speaker') || p.name.toLowerCase().includes('i2s')).map(p => p.id)],
-          tools: ['Python test script', 'Speaker test audio'],
+          id: '2.3',
+          step: 3,
+          title: 'Connect actuators to motor driver outputs',
+          description: `Wire ${actuatorParts.map((p) => p.name).join(' and ')} to the motor driver output terminals. Observe correct polarity and phase wiring.`,
+          partIds: [
+            ...moduleParts.filter((p) => p.name.toLowerCase().includes('driver')).map((p) => p.id),
+            ...actuatorParts.map((p) => p.id),
+          ],
+          tools: ['Wire strippers', 'Screwdriver', 'Multimeter'],
         },
       ],
     },
@@ -184,89 +121,221 @@ function autoGeneratePhases(projectName: string, parts: { id: string; name: stri
       icon: '🔧',
       steps: [
         {
-          id: '4.1',
-          title: 'Assemble the robot chassis using aluminum extrusions and corner brackets',
-          description: 'Build the main frame using 2020 aluminum extrusions and T-slot brackets. Ensure the frame is square before tightening.',
-          partIds: structural.filter(p => p.name.toLowerCase().includes('extrusion') || p.name.toLowerCase().includes('bracket') || p.name.toLowerCase().includes('frame')).map(p => p.id),
+          id: '3.1',
+          step: 1,
+          title: 'Assemble main chassis and structural frame',
+          description: `Build the frame using ${structural.find((p) => p.name.toLowerCase().includes('extrusion'))?.name ?? 'aluminum extrusions'}. Ensure the frame is square before final tightening.`,
+          partIds: structural.filter(
+            (p) =>
+              p.name.toLowerCase().includes('extrusion') ||
+              p.name.toLowerCase().includes('bracket') ||
+              p.name.toLowerCase().includes('frame') ||
+              p.name.toLowerCase().includes('plate')
+          ).map((p) => p.id),
           tools: ['M4 hex key', 'M4 T-nut', 'Torque wrench', 'Square ruler'],
         },
         {
+          id: '3.2',
+          step: 2,
+          title: 'Mount electronics to chassis',
+          description: `Install ${mcuParts.map((p) => p.name).join(', ')} and other electronics. Route cables cleanly and avoid interference with moving parts.`,
+          partIds: [...mcuParts.map((p) => p.id), ...moduleParts.map((p) => p.id), ...powerParts.map((p) => p.id)],
+          tools: ['M3 bolts', 'Standoffs', 'Cable ties', 'Double-sided tape'],
+        },
+        {
+          id: '3.3',
+          step: 3,
+          title: 'Install sensors and actuators',
+          description: `Mount ${[...sensorParts, ...actuatorParts].map((p) => p.name).join(', ')} to designated positions. Check alignment before securing.`,
+          partIds: [...sensorParts.map((p) => p.id), ...actuatorParts.map((p) => p.id)],
+          tools: ['M3 bolts', 'Screwdriver', 'Hot glue (optional)'],
+        },
+      ],
+    },
+    {
+      id: 'bringup',
+      name: 'Bring-up',
+      icon: '🚀',
+      steps: [
+        {
+          id: '4.1',
+          step: 1,
+          title: 'Power on and verify boot',
+          description: `Insert SD card with OS, connect power, and verify ${mcuParts[0]?.name ?? 'MCU'} boots correctly. Check for any initialization errors.`,
+          partIds: mcuParts.map((p) => p.id),
+          tools: ['HDMI monitor', 'USB keyboard', 'SD card reader'],
+        },
+        {
           id: '4.2',
-          title: 'Mount the Robot Base Plate and caster wheels to the chassis',
-          description: 'Attach the base plate and install caster wheels at the front and/or rear of the robot.',
-          partIds: structural.filter(p => p.name.toLowerCase().includes('plate') || p.name.toLowerCase().includes('base') || p.name.toLowerCase().includes('caster') || p.name.toLowerCase().includes('wheel')).map(p => p.id),
-          tools: ['M4 hex key', 'Screwdriver'],
+          step: 2,
+          title: 'Test each subsystem independently',
+          description: `Test ${sensorParts.map((p) => p.name).join(', ')} individually, then ${actuatorParts.map((p) => p.name).join(', ')}. Verify correct operation before integration.`,
+          partIds: [...sensorParts.map((p) => p.id), ...actuatorParts.map((p) => p.id)],
+          tools: ['Python test scripts', 'Multimeter', 'Oscilloscope (optional)'],
         },
         {
           id: '4.3',
-          title: 'Attach Stepper Motors and Drive Wheels to the chassis',
-          description: 'Mount the motors using 3D printed mounts, then attach wheels with hub adapters. Check shaft alignment.',
-          partIds: [...actuatorParts.filter(p => p.name.toLowerCase().includes('motor') || p.name.toLowerCase().includes('nema') || p.name.toLowerCase().includes('wheel') || p.name.toLowerCase().includes('hub')).map(p => p.id), ...structural.filter(p => p.name.toLowerCase().includes('mount') || p.name.toLowerCase().includes('adapter')).map(p => p.id)],
-          tools: ['M3 hex key', 'M3 bolts', 'Locktite (optional)'],
-        },
-        {
-          id: '4.4',
-          title: 'Mount the Ultrasonic Sensor and Camera to the front frame',
-          description: 'Install the ultrasonic sensor and vision camera at their designated positions on the front of the robot.',
-          partIds: [...sensorParts.filter(p => p.name.toLowerCase().includes('ultrasonic') || p.name.toLowerCase().includes('camera') || p.name.toLowerCase().includes('vision') || p.name.toLowerCase().includes('sensor')).map(p => p.id), ...structural.filter(p => p.name.toLowerCase().includes('sensor') || p.name.toLowerCase().includes('camera') || p.name.toLowerCase().includes('mount')).map(p => p.id)],
-          tools: ['M3 bolts', 'Double-sided tape', 'Cable ties'],
-        },
-        {
-          id: '4.5',
-          title: 'Mount the L298N Motor Driver, Raspberry Pi, Speaker, and LiPo Battery Holder',
-          description: 'Install all major components on the frame. Route cables cleanly to avoid interference with moving parts.',
-          partIds: [...mcuParts.map(p => p.id), ...moduleParts.filter(p => p.name.toLowerCase().includes('driver') || p.name.toLowerCase().includes('speaker') || p.name.toLowerCase().includes('i2s')).map(p => p.id), ...powerParts.filter(p => p.name.toLowerCase().includes('battery') || p.name.toLowerCase().includes('holder')).map(p => p.id), ...structural.filter(p => p.name.toLowerCase().includes('mount') || p.name.toLowerCase().includes('holder')).map(p => p.id)],
-          tools: ['M3 bolts', 'Standoffs', 'Cable ties', 'Cable clips'],
-        },
-        {
-          id: '4.6',
-          title: 'Assemble and attach the Lid Actuator Servo and linkage to the Refuse Container',
-          description: 'Mount the servo and connect the linkage to the container lid. Test open/close operation.',
-          partIds: [...actuatorParts.filter(p => p.name.toLowerCase().includes('servo') || p.name.toLowerCase().includes('actuator') || p.name.toLowerCase().includes('lid')).map(p => p.id), ...structural.filter(p => p.name.toLowerCase().includes('container') || p.name.toLowerCase().includes('refuse') || p.name.toLowerCase().includes('lid') || p.name.toLowerCase().includes('linkage')).map(p => p.id)],
-          tools: ['M3 bolts', 'Screwdriver', 'Hot glue'],
-        },
-        {
-          id: '4.7',
-          title: 'Attach external shell panels to the robot frame',
-          description: 'Install all remaining enclosure panels. Ensure all connectors are accessible for future maintenance.',
-          partIds: structural.filter(p => p.name.toLowerCase().includes('shell') || p.name.toLowerCase().includes('panel') || p.name.toLowerCase().includes('enclosure')).map(p => p.id),
-          tools: ['M4 bolts', 'Hex key', 'Snap rivets'],
+          step: 3,
+          title: 'Full system integration test',
+          description: `Run full project test covering all ${parts.length} components. Verify ${projectName} operates as specified.`,
+          partIds: parts.map((p) => p.id),
+          tools: ['Test scripts', 'Power supply', 'Reference schematic'],
         },
       ],
     },
   ]
 }
 
-const TOOLS_DEFAULT = [
-  '3D printer (PETG and PLA capable)',
-  'M4 hex key',
-  'M3 hex key',
-  'Wire strippers',
-  'Small Phillips head screwdriver',
-  'Multimeter',
-]
-
-const ASSUMPTIONS_DEFAULT = [
-  'Basic understanding of Raspberry Pi GPIO',
-  'Ability to configure Raspberry Pi OS',
-  'Familiarity with 3D printing processes',
-  'Knowledge of safe LiPo battery handling',
-]
-
 export default function InstructionsTab() {
-  const { project } = useProjectStore()
+  const { project, setProject } = useProjectStore()
   const [doneSteps, setDoneSteps] = useState<Record<string, boolean>>({})
+  const [generating, setGenerating] = useState(false)
+  const [genPhase, setGenPhase] = useState('')
+  const [genThinking, setGenThinking] = useState('')
+  const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
 
   if (!project) {
     return <div className="p-8 text-[var(--c-g600)]">Loading...</div>
   }
 
-  const phases = autoGeneratePhases(project.name, project.parts)
+  // Merge stored instructions with auto-generated fallback
+  const storedPhases = project.instructions?.length
+    ? parseStoredInstructions(project.instructions)
+    : null
+
+  const phases = storedPhases ?? autoGeneratePhases(project.name, project.parts)
   const totalSteps = phases.reduce((sum, p) => sum + p.steps.length, 0)
-  const doneCount = Object.values(doneSteps).filter(Boolean).length
+  const doneCount = phases.reduce(
+    (sum, p) => sum + p.steps.filter((s) => doneSteps[s.id]).length,
+    0
+  )
 
   const toggleStep = (stepId: string) => {
-    setDoneSteps(prev => ({ ...prev, [stepId]: !prev[stepId] }))
+    setDoneSteps((prev) => ({ ...prev, [stepId]: !prev[stepId] }))
+  }
+
+  const handleGenerate = useCallback(async () => {
+    if (!project || generating) return
+    setGenerating(true)
+    setError('')
+    setGenThinking('')
+
+    const aiMsgId = `gen-${Date.now()}`
+
+    try {
+      abortRef.current = new AbortController()
+      const res = await fetch('/api/instructions/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName: project.name,
+          parts: project.parts.map((p) => ({
+            id: p.id,
+            name: p.name,
+            category: p.category,
+            qty: p.qty,
+            description: p.description ?? '',
+            model: p.model,
+          })),
+        }),
+        signal: abortRef.current.signal,
+      })
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullThinking = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') continue
+
+          try {
+            const chunk: StreamingChunk = JSON.parse(data)
+
+            if (chunk.phase === 'thinking') {
+              fullThinking += chunk.thinking ?? ''
+              setGenThinking(fullThinking.slice(-300))
+            }
+
+            if (chunk.phase === 'parsing') {
+              setGenPhase(chunk.progress ?? '正在生成…')
+            }
+
+            if (chunk.phase === 'done' && chunk.result) {
+              const { result } = chunk
+              const newPhases = result.phases.map((phase) => ({
+                ...phase,
+                steps: phase.steps.map((s) => ({
+                  ...s,
+                  id: `${phase.id}-${s.step}`,
+                })),
+              }))
+
+              // Persist to project store
+              const flatInstructions: Instruction[] = newPhases.flatMap((phase) =>
+                phase.steps.map((s) => ({
+                  step: s.step,
+                  title: s.title,
+                  description: s.description,
+                  partIds: s.partIds,
+                  tools: s.tools,
+                  tips: s.tips,
+                }))
+              )
+
+              setProject({
+                ...project,
+                instructions: flatInstructions,
+              })
+
+              setGenPhase(`✅ 已生成 ${newPhases.reduce((s, p) => s + p.steps.length, 0)} 个步骤`)
+              setTimeout(() => {
+                setGenerating(false)
+                setGenPhase('')
+                setGenThinking('')
+              }, 2000)
+              return
+            }
+
+            if (chunk.phase === 'error') {
+              throw new Error(chunk.error ?? '生成失败')
+            }
+          } catch (err) {
+            if ((err as Error).name === 'AbortError') {
+              setGenerating(false)
+              setGenPhase('')
+              return
+            }
+            // skip parse errors
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setError(err.message ?? '生成失败，请重试')
+      }
+    } finally {
+      setGenerating(false)
+      abortRef.current = null
+    }
+  }, [project, generating, setProject])
+
+  const handleRegenerate = () => {
+    if (generating) abortRef.current?.abort()
+    handleGenerate()
   }
 
   return (
@@ -275,21 +344,90 @@ export default function InstructionsTab() {
       <div className="sticky top-0 z-10 bg-[var(--c-bg)] border-b border-[var(--c-g800)] px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-bold text-white uppercase tracking-wider">Instructions</h2>
-          <span className="text-xs px-2 py-0.5 bg-[var(--c-g800)] text-[var(--c-g400)] rounded-full">
+          <span className="text-xs px-2 py-0.5 bg-[var(--c-g800)] text-[var(--c-g400)] rounded-full font-mono">
             {doneCount}/{totalSteps} Done
           </span>
+          {project?.instructions?.length ? (
+            <span className="text-[10px] px-1.5 py-0.5 bg-[#22c55e]/15 text-[#22c55e] rounded font-bold">
+              AI 生成
+            </span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.5 bg-[var(--c-g800)] text-[var(--c-g600)] rounded">
+              模板
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <button className="px-3 py-1.5 text-[10px] font-bold border border-[var(--c-g700)] text-[var(--c-g400)] rounded-lg hover:border-[var(--c-g500)] hover:text-white transition-colors">
-            Regenerate
+          <button
+            onClick={handleRegenerate}
+            disabled={generating}
+            className="px-3 py-1.5 text-[10px] font-bold border border-[var(--c-g700)] text-[var(--c-g400)] rounded-lg hover:border-[var(--c-g500)] hover:text-white transition-colors disabled:opacity-50"
+          >
+            🔄 Regenerate
           </button>
-          <button className="px-3 py-1.5 text-[10px] font-bold bg-[var(--c-accent)] text-black rounded-lg hover:opacity-90 transition-opacity">
-            Generate All ({totalSteps})
+          <button
+            onClick={handleGenerate}
+            disabled={generating || !project.parts.length}
+            className="px-3 py-1.5 text-[10px] font-bold bg-[var(--c-accent)] text-black rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {generating ? (
+              <>
+                <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                生成中…
+              </>
+            ) : (
+              <>🤖 Generate All ({totalSteps})</>
+            )}
           </button>
         </div>
       </div>
 
+      {/* Generation status */}
+      {generating && (
+        <div className="mx-6 mt-4 p-4 border border-[var(--c-accent)]/30 bg-[var(--c-accent)]/5 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-[var(--c-accent)] animate-pulse" />
+            <span className="text-xs font-bold text-[var(--c-accent)]">{genPhase || '正在生成…'}</span>
+          </div>
+          {genThinking && (
+            <p className="text-xs text-[var(--c-g500)] leading-relaxed">
+              {genThinking}
+              <span className="inline-block w-1 h-3 bg-[var(--c-accent)] ml-1 animate-pulse align-middle" />
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="mx-6 mt-4 p-3 border border-red-900/30 bg-red-950/10 rounded-xl">
+          <p className="text-xs text-red-400">❌ {error}</p>
+        </div>
+      )}
+
       <div className="p-6 space-y-8">
+        {/* AI generation progress: percentage + phase */}
+        {generating && (
+          <div className="mx-6 mt-4 p-4 border border-[var(--c-accent)]/30 bg-[var(--c-accent)]/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-[var(--c-accent)] animate-pulse" />
+              <span className="text-xs font-bold text-[var(--c-accent)]">{genPhase || '正在生成…'}</span>
+            </div>
+            {genThinking && (
+              <p className="text-xs text-[var(--c-g500)] leading-relaxed">
+                {genThinking}
+                <span className="inline-block w-1 h-3 bg-[var(--c-accent)] ml-1 animate-pulse align-middle" />
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="mx-6 mt-4 p-3 border border-red-900/30 bg-red-950/10 rounded-xl">
+            <p className="text-xs text-red-400">❌ {error}</p>
+          </div>
+        )}
+
         {/* Tools & Assumptions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="border border-[var(--c-g800)] rounded-xl p-4">
@@ -297,7 +435,7 @@ export default function InstructionsTab() {
               <span>🔧</span> Tools
             </h3>
             <ul className="space-y-1.5">
-              {TOOLS_DEFAULT.map((tool) => (
+              {DEFAULT_TOOLS.map((tool) => (
                 <li key={tool} className="flex items-start gap-2 text-xs text-[var(--c-g400)]">
                   <span className="text-[var(--c-g600)] mt-0.5">•</span>
                   {tool}
@@ -310,7 +448,7 @@ export default function InstructionsTab() {
               <span>📋</span> Assumptions
             </h3>
             <ul className="space-y-1.5">
-              {ASSUMPTIONS_DEFAULT.map((a) => (
+              {DEFAULT_ASSUMPTIONS.map((a) => (
                 <li key={a} className="flex items-start gap-2 text-xs text-[var(--c-g400)]">
                   <span className="text-[var(--c-g600)] mt-0.5">-</span>
                   {a}
@@ -322,7 +460,7 @@ export default function InstructionsTab() {
 
         {/* Phases */}
         {phases.map((phase) => {
-          const phaseDone = phase.steps.filter(s => doneSteps[s.id]).length
+          const phaseDone = phase.steps.filter((s) => doneSteps[s.id]).length
           return (
             <div key={phase.id} className="space-y-3">
               {/* Phase header */}
@@ -330,12 +468,16 @@ export default function InstructionsTab() {
                 <div className="flex items-center gap-3">
                   <span className="text-xl">{phase.icon}</span>
                   <h3 className="text-base font-bold text-white">{phase.name}</h3>
-                  <span className="text-xs px-2 py-0.5 bg-[var(--c-g800)] text-[var(--c-g500)] rounded-full">
+                  <span className="text-xs px-2 py-0.5 bg-[var(--c-g800)] text-[var(--c-g500)] rounded-full font-mono">
                     {phaseDone}/{phase.steps.length}
                   </span>
                 </div>
-                <button className="px-3 py-1 text-[10px] font-bold border border-[var(--c-g700)] text-[var(--c-g500)] rounded-lg hover:border-[var(--c-g500)] hover:text-white transition-colors">
-                  Generate ({phase.steps.length})
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating || !project.parts.length}
+                  className="px-3 py-1 text-[10px] font-bold border border-[var(--c-g700)] text-[var(--c-g500)] rounded-lg hover:border-[var(--c-g500)] hover:text-white transition-colors disabled:opacity-50"
+                >
+                  🤖 Generate ({phase.steps.length})
                 </button>
               </div>
 
@@ -343,7 +485,10 @@ export default function InstructionsTab() {
               <div className="space-y-2">
                 {phase.steps.map((step) => {
                   const isDone = doneSteps[step.id]
-                  const partObjs = step.partIds.map(id => project.parts.find(p => p.id === id)).filter(Boolean)
+                  const partObjs = step.partIds
+                    .map((id) => project.parts.find((p) => p.id === id))
+                    .filter(Boolean)
+
                   return (
                     <div
                       key={step.id}
@@ -373,32 +518,59 @@ export default function InstructionsTab() {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3 mb-1">
-                            <h4 className={`text-sm font-semibold leading-tight ${isDone ? 'line-through text-[var(--c-g600)]' : 'text-white'}`}>
-                              {step.id}. {step.title}
+                            <h4
+                              className={`text-sm font-semibold leading-tight ${
+                                isDone ? 'line-through text-[var(--c-g600)]' : 'text-white'
+                              }`}
+                            >
+                              {step.step}. {step.title}
                             </h4>
                             {partObjs.length > 0 && (
-                              <span className="text-[10px] text-[var(--c-g600)] shrink-0 mt-0.5">
+                              <span className="text-[10px] text-[var(--c-g600)] shrink-0 mt-0.5 font-mono">
                                 {partObjs.length} parts
                               </span>
                             )}
                           </div>
-                          <p className={`text-xs leading-relaxed ${isDone ? 'text-[var(--c-g700)]' : 'text-[var(--c-g500)]'}`}>
+                          <p
+                            className={`text-xs leading-relaxed ${
+                              isDone ? 'text-[var(--c-g700)]' : 'text-[var(--c-g500)]'
+                            }`}
+                          >
                             {step.description}
                           </p>
-                          {partObjs.length > 0 && (
+                          {step.tools.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
-                              {partObjs.slice(0, 6).map((part) => part && (
+                              {step.tools.map((tool) => (
                                 <span
-                                  key={part.id}
-                                  className="text-[10px] px-1.5 py-0.5 rounded"
-                                  style={{
-                                    backgroundColor: `${getCategoryColor(part.category)}15`,
-                                    color: getCategoryColor(part.category),
-                                  }}
+                                  key={tool}
+                                  className="text-[10px] px-1.5 py-0.5 bg-[var(--c-g800)] text-[var(--c-g500)] rounded"
                                 >
-                                  {part.name}
+                                  🔧 {tool}
                                 </span>
                               ))}
+                            </div>
+                          )}
+                          {step.tips && !isDone && (
+                            <p className="text-[10px] text-[var(--c-accent)] mt-1.5 italic">
+                              💡 {step.tips}
+                            </p>
+                          )}
+                          {partObjs.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {partObjs.slice(0, 6).map((part) =>
+                                part ? (
+                                  <span
+                                    key={part.id}
+                                    className="text-[10px] px-1.5 py-0.5 rounded"
+                                    style={{
+                                      backgroundColor: `${getCategoryColor(part.category)}15`,
+                                      color: getCategoryColor(part.category),
+                                    }}
+                                  >
+                                    {part.name}
+                                  </span>
+                                ) : null
+                              )}
                               {partObjs.length > 6 && (
                                 <span className="text-[10px] text-[var(--c-g600)] px-1.5 py-0.5">
                                   +{partObjs.length - 6} more
@@ -418,4 +590,43 @@ export default function InstructionsTab() {
       </div>
     </div>
   )
+}
+
+// Parse flat instruction list into phases
+function parseStoredInstructions(
+  instructions: Instruction[]
+): Phase[] {
+  const phaseMap: Record<string, Phase> = {}
+
+  // Heuristic phase assignment
+  instructions.forEach((inst) => {
+    const title = inst.title.toLowerCase()
+    let phaseId = 'assemble'
+    let phaseName = 'Assemble'
+    let phaseIcon = '🔧'
+
+    if (title.includes('print') || title.includes('fabricat') || title.includes('3d')) {
+      phaseId = 'fabricate'; phaseName = 'Fabricate'; phaseIcon = '🖨️'
+    } else if (title.includes('wire') || title.includes('connect') || title.includes('power') || title.includes('solder')) {
+      phaseId = 'wire'; phaseName = 'Wire'; phaseIcon = '⚡'
+    } else if (title.includes('boot') || title.includes('test') || title.includes('software') || title.includes('program')) {
+      phaseId = 'bringup'; phaseName = 'Bring-up'; phaseIcon = '🚀'
+    }
+
+    if (!phaseMap[phaseId]) {
+      phaseMap[phaseId] = { id: phaseId, name: phaseName, icon: phaseIcon, steps: [] }
+    }
+
+    phaseMap[phaseId].steps.push({
+      id: `${phaseId}-${inst.step}`,
+      step: inst.step,
+      title: inst.title,
+      description: inst.description,
+      partIds: inst.partIds ?? [],
+      tools: inst.tools ?? [],
+      tips: inst.tips,
+    })
+  })
+
+  return Object.values(phaseMap)
 }

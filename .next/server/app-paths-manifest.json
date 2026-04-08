@@ -19,6 +19,7 @@
   "/api/community/route": "app/api/community/route.js",
   "/api/debug/route": "app/api/debug/route.js",
   "/api/image/route": "app/api/image/route.js",
+  "/api/instructions/stream/route": "app/api/instructions/stream/route.js",
   "/api/lcsc/route": "app/api/lcsc/route.js",
   "/api/paddle/webhook/route": "app/api/paddle/webhook/route.js",
   "/api/projects/[id]/route": "app/api/projects/[id]/route.js",

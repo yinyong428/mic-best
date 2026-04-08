@@ -43,7 +43,20 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setProject: (project) =>
     set((state) => {
       if (!project) return { project: null }
-      return { project: { ...(state.project ?? {}), ...project } }
+      return {
+        project: {
+          ...(state.project ?? {}),
+          ...project,
+          // Always preserve these from current state
+          id: project.id ?? state.project?.id,
+          author: project.author ?? state.project?.author,
+          createdAt: project.createdAt ?? state.project?.createdAt,
+          updatedAt: new Date().toISOString(),
+          instructions: project.instructions ?? state.project?.instructions ?? [],
+          wiringNodes: project.wiringNodes ?? state.project?.wiringNodes ?? [],
+          wiringEdges: project.wiringEdges ?? state.project?.wiringEdges ?? [],
+        },
+      }
     }),
 
   setProjectImage: (imageUrl) =>
@@ -79,6 +92,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   updateBom: (items, totalCost, projectName, description) =>
     set((state) => {
+      if (!state.project) return { project: null }
       const parts = items.map((item, i) => ({
         id: `part-${Date.now()}-${i}`,
         name: item.name,
@@ -88,18 +102,23 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         qty: item.qty,
         unitCost: item.unitCost ?? 0,
       }))
-      // Always replace — don't merge with stale project data
+      // Preserve existing instructions — only replace when explicitly generated
+      const existingInstructions = state.project.instructions ?? []
       return {
         project: {
-          id: `project-${Date.now()}`,
-          name: projectName ?? 'Untitled',
-          description: description ?? '',
+          id: state.project.id,
+          name: projectName ?? state.project.name,
+          description: description ?? state.project.description,
           parts,
           totalCost,
-          status: 'draft' as const,
-          author: 'olly',
-          createdAt: new Date().toISOString(),
+          status: state.project.status,
+          author: state.project.author,
+          createdAt: state.project.createdAt,
           updatedAt: new Date().toISOString(),
+          instructions: existingInstructions,
+          wiringNodes: state.project.wiringNodes ?? [],
+          wiringEdges: state.project.wiringEdges ?? [],
+          imageUrl: state.project.imageUrl,
         },
       }
     }),
