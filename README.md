@@ -75,10 +75,10 @@ npm run dev
 **类型**: TypeScript
 
 **待集成**:
-- Three.js + React Three Fiber (3D 可视化)
-- React Flow (接线图)
-- Supabase (后端数据库)
-- 通义千问 / DeepSeek (AI 对话)
+- Three.js + React Three Fiber — ✅ 已集成（MechTab 爆炸图、首页背景）
+- React Flow — ✅ 已集成（WiringTab）
+- Supabase — 🔄 schema 设计完成，API 接入中
+- 通义千问 / DeepSeek — 🔄 百炼已接入，DeepSeek 待接入
 
 ---
 
@@ -93,9 +93,9 @@ npm run dev
 - [x] AI Chat 面板
 - [x] Zustand 状态管理
 - [x] Mock 数据
-- [ ] Three.js 3D 背景
-- [ ] React Flow 接线图
-- [ ] Three.js 爆炸图
+- [x] Three.js 3D 背景（首页 PCB 风格动态背景）
+- [x] React Flow 接线图（支持拖拽布局自动保存）
+- [x] Three.js 爆炸图动画
 
 ---
 
