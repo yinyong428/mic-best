@@ -15,6 +15,7 @@ import {
   type Edge,
   type Connection,
   BackgroundVariant,
+  MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useProjectStore } from '@/stores/projectStore'
@@ -28,6 +29,56 @@ interface WiringPart {
 }
 
 const WIRING_CATEGORIES = ['mcu', 'sensor', 'actuator', 'power', 'module']
+
+// Infers the voltage/signal label for an edge based on source and target categories
+function inferEdgeLabel(sourceName: string, sourceCategory: string, targetCategory: string): string {
+  const lower = sourceName.toLowerCase()
+  // Power → anything = voltage
+  if (sourceCategory === 'power') return '5V/3V3'
+  // MCU → sensor = GPIO or specific bus
+  if (sourceCategory === 'mcu' && targetCategory === 'sensor') {
+    if (lower.includes('camera') || lower.includes('cam')) return 'CSI'
+    if (lower.includes('ultrasonic') || lower.includes('hc-sr')) return 'GPIO'
+    if (lower.includes('i2c') || lower.includes('display') || lower.includes('oled') || lower.includes('lcd')) return 'I2C'
+    if (lower.includes('spi')) return 'SPI'
+    return 'GPIO'
+  }
+  // MCU → module = GPIO, I2C, SPI
+  if (sourceCategory === 'mcu' && targetCategory === 'module') {
+    if (lower.includes('camera') || lower.includes('cam')) return 'CSI'
+    if (lower.includes('i2c') || lower.includes('display') || lower.includes('oled') || lower.includes('lcd')) return 'I2C'
+    if (lower.includes('spi') || lower.includes('flash')) return 'SPI'
+    if (lower.includes('speaker') || lower.includes('audio') || lower.includes('i2s')) return 'I2S'
+    return 'GPIO'
+  }
+  // MCU → actuator = GPIO or PWM
+  if (sourceCategory === 'mcu' && targetCategory === 'actuator') {
+    if (lower.includes('servo') || lower.includes('sg90')) return 'PWM'
+    if (lower.includes('motor') || lower.includes('nema') || lower.includes('stepper')) return 'GPIO'
+    return 'GPIO/PWM'
+  }
+  // Sensor → MCU = data lines
+  if (sourceCategory === 'sensor' && targetCategory === 'mcu') {
+    if (lower.includes('i2c') || lower.includes('display') || lower.includes('oled') || lower.includes('lcd')) return 'I2C'
+    if (lower.includes('spi')) return 'SPI'
+    return 'DATA'
+  }
+  // Module → MCU = data lines
+  if (sourceCategory === 'module' && targetCategory === 'mcu') {
+    if (lower.includes('i2c') || lower.includes('display') || lower.includes('oled') || lower.includes('lcd')) return 'I2C'
+    if (lower.includes('spi') || lower.includes('flash')) return 'SPI'
+    if (lower.includes('speaker') || lower.includes('audio') || lower.includes('i2s')) return 'I2S'
+    return 'DATA'
+  }
+  // Module → actuator = PWM or signal
+  if (sourceCategory === 'module' && targetCategory === 'actuator') {
+    if (lower.includes('l298') || lower.includes('motor driver') || lower.includes('drv')) return 'PWM'
+    if (lower.includes('relay')) return 'SIG'
+    return 'SIG'
+  }
+  if (sourceCategory === 'power') return '5V'
+  return ''
+}
 
 function inferPins(name: string, category: string): string[] {
   const lower = name.toLowerCase()
@@ -123,17 +174,26 @@ function generateWiring(parts: WiringPart[]): { nodes: Node[]; edges: Edge[] } {
   const powerNodes = parts.filter((p) => p.category === 'power')
   const moduleNodes = parts.filter((p) => p.category === 'module')
 
-  const addAutoEdge = (source: string, target: string) => {
-    const key = `${source}→${target}`
+  const addAutoEdge = (sourceId: string, targetId: string) => {
+    const key = `${sourceId}→${targetId}`
     if (edgeSet.has(key)) return
     edgeSet.add(key)
-    const sourcePart = parts.find((p) => p.id === source)
+
+    const sourcePart = parts.find((p) => p.id === sourceId)
+    const targetPart = parts.find((p) => p.id === targetId)
+    const edgeColor = getCategoryColor(sourcePart?.category ?? 'misc')
+    const signalLabel = inferEdgeLabel(sourcePart?.name ?? '', sourcePart?.category ?? '', targetPart?.category ?? '')
+
     edges.push({
-      id: `e-${source}-${target}`,
-      source,
-      target,
+      id: `e-${sourceId}-${targetId}`,
+      source: sourceId,
+      target: targetId,
       animated: true,
-      style: { stroke: getCategoryColor(sourcePart?.category ?? 'misc'), strokeWidth: 2, opacity: 0.7 },
+      label: signalLabel,
+      labelStyle: { fill: '#9ca3af', fontWeight: 600, fontSize: 10 },
+      labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9 },
+      style: { stroke: edgeColor, strokeWidth: 2, opacity: 0.7 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 15, height: 15 },
     })
   }
 
@@ -164,7 +224,6 @@ export default function WiringTab() {
     [project?.parts]
   )
 
-  // Saved data from project store
   const savedData = useMemo(() => {
     if (project?.wiringNodes && project.wiringNodes.length > 0) {
       return {
@@ -175,7 +234,6 @@ export default function WiringTab() {
     return null
   }, [project?.wiringNodes, project?.wiringEdges])
 
-  // Initial state: use saved positions if available, otherwise auto-generate
   const initialState = useMemo(() => {
     return savedData ?? generateWiring(wiringParts)
   }, [savedData, wiringParts])
@@ -183,21 +241,16 @@ export default function WiringTab() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialState.nodes as unknown as Node[])
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialState.edges)
 
-  // Sync when project wiring data loads (e.g. after page reload)
-  // useNodesState only uses initialState on mount; we need to update when store changes
   const lastProjectUpdatedAt = useRef(project?.updatedAt)
   useEffect(() => {
     if (!project?.updatedAt || project.updatedAt === lastProjectUpdatedAt.current) return
     lastProjectUpdatedAt.current = project.updatedAt
-
     if (savedData && !isDirty) {
-      // Project loaded from server — use saved positions
       setNodes(savedData.nodes as unknown as Node[])
       setEdges(savedData.edges as unknown as Edge[])
     }
   }, [project?.updatedAt, savedData, isDirty])
 
-  // Debounced auto-persist node positions to store (not to API)
   const autoPersistRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const syncPositionsToStore = useCallback(() => {
@@ -222,7 +275,6 @@ export default function WiringTab() {
         )
       )
       setIsDirty(true)
-      // Persist positions and connections to store (API persist is manual)
       syncPositionsToStore()
     },
     [setEdges, syncPositionsToStore]
@@ -231,14 +283,11 @@ export default function WiringTab() {
   const handleNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChange>[0]) => {
       onNodesChange(changes)
-
-      // Detect position changes (drag end = 'position' change with drag=true)
       const hasPositionChange = changes.some(
         (c) => c.type === 'position' && c.dragging === false
       )
       if (hasPositionChange) {
         setIsDirty(true)
-        // Debounce store sync — don't write on every pixel of drag, only on drag end
         if (autoPersistRef.current) clearTimeout(autoPersistRef.current)
         autoPersistRef.current = setTimeout(() => {
           syncPositionsToStore()
@@ -251,9 +300,7 @@ export default function WiringTab() {
   const handleEdgesChange = useCallback(
     (changes: Parameters<typeof onEdgesChange>[0]) => {
       onEdgesChange(changes)
-      const hasConnectionChange = changes.some(
-        (c) => c.type === 'add' || c.type === 'remove'
-      )
+      const hasConnectionChange = changes.some((c) => c.type === 'add' || c.type === 'remove')
       if (hasConnectionChange) {
         setIsDirty(true)
         syncPositionsToStore()
@@ -264,10 +311,7 @@ export default function WiringTab() {
 
   const handleSave = async () => {
     setSaveStatus('saving')
-
-    // Ensure latest positions are in store before save
     syncPositionsToStore()
-
     const result = await saveProject()
     setSaveStatus(result.success ? 'saved' : 'error')
     if (result.success) setIsDirty(false)
