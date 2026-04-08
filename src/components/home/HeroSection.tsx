@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { ideaExamples } from '@/lib/mockData'
 import { useBOMStore } from '@/stores/bomStore'
+import ThreeBackground from '@/components/home/ThreeBackground'
 
 export default function HeroSection({ showIdeas, onToggleIdeas }: {
   showIdeas: boolean
@@ -12,20 +13,7 @@ export default function HeroSection({ showIdeas, onToggleIdeas }: {
 }) {
   const t = useTranslations('home')
   const [inputValue, setInputValue] = useState('')
-  const [particles, setParticles] = useState<Array<{ x: number; y: number; opacity: number; duration: number; delay: number }>>([])
   const { phase, result, error, thinking, progress, imageUrl, imageLoading, generate, approve, reset } = useBOMStore()
-
-  useEffect(() => {
-    setParticles(
-      Array.from({ length: 20 }).map(() => ({
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        opacity: Math.random() * 0.5 + 0.2,
-        duration: 2 + Math.random() * 3,
-        delay: Math.random() * 2,
-      }))
-    )
-  }, [])
 
   const handleSubmit = () => {
     if (!inputValue.trim() || phase !== 'idle') return
@@ -36,32 +24,15 @@ export default function HeroSection({ showIdeas, onToggleIdeas }: {
     <section className="relative min-h-[70vh] flex flex-col items-center justify-center px-4 py-16 overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 -z-10">
+        <ThreeBackground />
         <div
           className="absolute inset-0"
           style={{
             background: `
-              radial-gradient(ellipse at 20% 30%, rgba(34, 197, 94, 0.15) 0%, transparent 50%),
-              radial-gradient(ellipse at 80% 70%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
-              radial-gradient(ellipse at 50% 50%, rgba(139, 92, 246, 0.05) 0%, transparent 70%),
-              #09090b
+              linear-gradient(180deg, #09090b 0%, transparent 20%, transparent 80%, #09090b 100%)
             `,
           }}
         />
-        <div className="absolute inset-0 opacity-30">
-          {particles.map((p, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 rounded-full bg-[var(--c-accent)]"
-              style={{
-                left: `${p.x}%`,
-                top: `${p.y}%`,
-                opacity: p.opacity,
-                animation: `pulse ${p.duration}s ease-in-out infinite`,
-                animationDelay: `${p.delay}s`,
-              }}
-            />
-          ))}
-        </div>
       </div>
 
       <div className="relative z-10 w-full max-w-3xl mx-auto text-center space-y-8">
