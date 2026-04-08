@@ -174,7 +174,7 @@ export default function ChatPanel() {
             useChatStore.setState((state) => ({
               messages: state.messages.map((m) =>
                 m.id === aiMsgId
-                  ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
+                  ? { ...m, content: `💡 思考中：${fullThinking}` }
                   : m
               ),
             }))
@@ -369,7 +369,7 @@ ${isModify ? '' : '支持直接链接到 LCSC / 1688 / 京东 / 华强北 采购
         ))}
         {isLoading && thinking && (
           <div className="text-sm text-[var(--c-g500)] italic animate-pulse">
-            {thinking.length > 150 ? '…' + thinking.slice(-150) : thinking}
+            {thinking}
           </div>
         )}
         {isLoading && !thinking && (
