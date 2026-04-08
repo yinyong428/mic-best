@@ -90,7 +90,7 @@ export async function streamGenerateBOM(
         ],
         stream: true,
         temperature: 0.7,
-        max_tokens: 2500,
+        max_tokens: 4000,
       }),
     })
 
@@ -151,26 +151,58 @@ export async function streamGenerateBOM(
       }
     }
 
-    // Parse final JSON
+    // Parse final JSON — handle truncated/malformed responses robustly
     if (fullText) {
       try {
         const jsonStart = fullText.indexOf('{')
         const jsonEnd = fullText.lastIndexOf('}')
         if (jsonStart !== -1 && jsonEnd !== -1) {
           const jsonStr = fullText.slice(jsonStart, jsonEnd + 1)
-          const result = JSON.parse(jsonStr) as BOMResult
-          const itemCount = result.items?.length ?? 0
-          if (!doneEmitted) {
-            doneEmitted = true
-            onChunk({
-              phase: 'done',
-              progress: `已生成 ${itemCount} 个元件，总成本 ¥${result.totalCost}`,
-              result,
-            })
+          // First attempt: strict parse
+          try {
+            const result = JSON.parse(jsonStr) as BOMResult
+            const itemCount = result.items?.length ?? 0
+            if (!doneEmitted) {
+              doneEmitted = true
+              onChunk({
+                phase: 'done',
+                progress: `已生成 ${itemCount} 个元件，总成本 ¥${result.totalCost}`,
+                result,
+              })
+            }
+            return
+          } catch {
+            // Second attempt: sanitize known truncation patterns then parse
+            const sanitized = jsonStr
+              .replace(/\\n/g, '\\n')
+              .replace(/(\\u[0-9a-f]{4})([^\\"]*?)(?=[^"\\]*$) /g, '$1$2')
+              // Remove trailing incomplete strings like `"descript`
+              .replace(/"[^"]*$/, '')
+              // Remove trailing commas before }
+              .replace(/,(\s*[\]\}])/g, '$1')
+              // Try again with sanitized
+              try {
+                const result = JSON.parse(sanitized) as BOMResult
+                const itemCount = result.items?.length ?? 0
+                if (!doneEmitted) {
+                  doneEmitted = true
+                  onChunk({ phase: 'done', progress: `已生成 ${itemCount} 个元件`, result })
+                }
+              } catch {
+                // Third attempt: extract items array via regex fallback
+                const itemsMatch = sanitized.match(/\"items\"\s*:\s*\[([^\]]*)/)
+                if (itemsMatch && !doneEmitted) {
+                  doneEmitted = true
+                  onChunk({ phase: 'done', progress: '已生成 BOM（部分数据）', result: undefined })
+                }
+              }
           }
         }
       } catch {
-        onChunk({ phase: 'error', error: '解析 BOM 失败，请重试' })
+        if (!doneEmitted) {
+          doneEmitted = true
+          onChunk({ phase: 'error', error: '解析 BOM 失败，请重试' })
+        }
       }
     }
   } catch (err) {
