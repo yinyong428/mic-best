@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'DASHSCOPE_API_KEY not configured' }, { status: 500 })
   }
 
-  const fullPrompt = `Professional hardware prototype: ${prompt}. Clean white background, technical product photography, photorealistic, sharp focus.`
+  const fullPrompt = `Professional hardware prototype: ${prompt}. Entire product shown in full view, centered, occupying approximately 70% of the frame. Neutral light gray background #D3D3D3 to #E8E8E8, clean and uniform with no gradient, no texture, no shadow cast on background. Product: dark PCB in near-black tones RGB[20-50], displayed as complete unit without close-up details. Soft even lighting, no harsh shadows, no reflections on background. Technical product photography style, photorealistic. Aspect ratio 16:10.
+
+Negative prompt: white background, pure white, bright white, close-up view, cropped view, partial product, large macro detail, harsh shadows, hard edges, text, watermark, UI elements, gradients on background.`
 
   try {
     const response = await fetch(`${BAILIAN_BASE}/services/aigc/multimodal-generation/generation`, {
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
         input: { messages: [{ role: 'user', content: [{ text: fullPrompt }] }] },
         parameters: {
           n: 1,
-          size: '1024*1024',
+          size: '1024*640',
           prompt_extend: true,
           watermark: false,
           negative_prompt: 'lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality',
