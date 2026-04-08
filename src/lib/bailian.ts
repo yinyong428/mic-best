@@ -225,15 +225,29 @@ async function streamBOM(
           fullText += token
 
           if (!thinkingDone) {
-            // Strip trailing JSON-opening brace from thinking text
-            const cleanToken = token.replace(/\{$/, '')
-            if (cleanToken) {
-              onChunk({ phase: 'thinking', thinking: cleanToken })
-            }
+            fullText += token
+
+            // Only emit thinking if there's non-JSON content.
+            // Wait for the JSON to be fully open: {" — not just a lone {
+            const jsonMarkerIdx = fullText.indexOf('{"')
             const jsonStart = fullText.indexOf('{')
-            if (jsonStart !== -1) {
+
+            if (jsonMarkerIdx !== -1) {
+              // JSON object has started — emit thinking content up to the marker,
+              // then switch to parsing
+              const thinkingText = fullText.slice(0, jsonMarkerIdx)
+              if (thinkingText) {
+                onChunk({ phase: 'thinking', thinking: thinkingText })
+              }
               thinkingDone = true
               onChunk({ phase: 'parsing', progress: '正在解析 BOM…' })
+            } else {
+              // Still in pure thinking — strip any trailing lone { that might
+              // appear mid-thought (not a JSON object start)
+              const cleanToken = token.replace(/\{$/, '')
+              if (cleanToken) {
+                onChunk({ phase: 'thinking', thinking: cleanToken })
+              }
             }
           }
         } catch {
