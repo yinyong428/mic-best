@@ -4,15 +4,30 @@ import { useState, useRef, useEffect } from 'react'
 import { useChatStore } from '@/stores/chatStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useUserStore } from '@/stores/userStore'
-import type { StreamingChunk } from '@/lib/bailian'
+import type { StreamingChunk, BOMItem } from '@/lib/bailian'
 
-const BOM_TRIGGER_KEYWORDS = [
+// ─── Keyword detection ─────────────────────────────────────────────────────────
+
+const BOM_GENERATE_KEYWORDS = [
   '生成', '帮我', '设计', '创建', '给我', '我想', 'build', 'create', 'generate', 'design',
+  '重新生成', '新项目', '另一个项目', '换一个方案', '重新设计',
 ]
 
-function isBomRequest(text: string): boolean {
+const BOM_MODIFY_KEYWORDS = [
+  '加', '添加', '增加', '加上', '加一个', '添加一个',  // add
+  '替换', '换成', '把', '改成', '改为', '换掉',         // replace/change
+  '删除', '移除', '不要', '删掉',                       // remove
+  '修改', '调整', '更新',                               // update
+  '增加数量', '减少数量', '改成', '改变数量',             // quantity
+]
+
+function detectMode(text: string, hasParts: boolean): 'generate' | 'modify' {
   const lower = text.toLowerCase()
-  return BOM_TRIGGER_KEYWORDS.some((kw) => lower.includes(kw))
+  const isGenerate = BOM_GENERATE_KEYWORDS.some((kw) => lower.includes(kw))
+  if (!hasParts) return 'generate'
+  // If project has parts and user uses modify keywords → it's a modification
+  const isModify = BOM_MODIFY_KEYWORDS.some((kw) => lower.includes(kw))
+  return isModify ? 'modify' : isGenerate ? 'generate' : 'modify'
 }
 
 function mapCategory(raw: string): string {
@@ -26,6 +41,69 @@ function mapCategory(raw: string): string {
   if (l.includes('structural') || l.includes('frame') || l.includes('3d')) return 'structural'
   return 'misc'
 }
+
+function bomItemToPart(item: BOMItem) {
+  return {
+    name: item.name,
+    category: mapCategory(item.category) as any,
+    model: item.partNumber || item.name,
+    description: item.description ?? '',
+    qty: item.quantity ?? 1,
+    unitCost: item.unitCost ?? 0,
+    lcscId: item.lcscId ?? '',
+    hqPartNumber: item.hqPartNumber ?? '',
+  }
+}
+
+// ─── Unified stream handler ────────────────────────────────────────────────────
+
+async function handleBomStream(
+  mode: 'generate' | 'modify',
+  payload: { description?: string; instruction?: string; context?: object },
+  _projectName: string,
+  onChunk: (chunk: StreamingChunk) => void,
+  signal?: AbortSignal
+) {
+  const res = await fetch('/api/bom/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode, ...payload }),
+    signal,
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(err || `HTTP ${res.status}`)
+  }
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (data === '[DONE]' || data === '[DONE]\n') continue
+
+      try {
+        const chunk: StreamingChunk = JSON.parse(data)
+        onChunk(chunk)
+      } catch {
+        // skip malformed
+      }
+    }
+  }
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function ChatPanel() {
   const { messages, isLoading, addMessage, setLoading } = useChatStore()
@@ -41,18 +119,38 @@ export default function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, thinking])
 
-  const handleBOMGeneration = async (description: string) => {
-    // Save current project description to localStorage first
-    try {
-      const saved = JSON.parse(localStorage.getItem('mic_best_last_project') ?? '{}')
-      localStorage.setItem('mic_best_last_project', JSON.stringify({
-        ...saved,
-        projectName: description,
-        bomResult: null, // clear old result
-      }))
-    } catch {}
+  // ─── Core handler ──────────────────────────────────────────────────────────
 
+  const runBomGeneration = async (userMessage: string, mode: 'generate' | 'modify') => {
+    const hasParts = (project?.parts.length ?? 0) > 0
     const aiMsgId = `ai-${Date.now()}`
+
+    // Preserve history for context (last 6 messages = 3 turns)
+    const historyMessages = messages.slice(-6).map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content.slice(0, 500), // truncate for token savings
+    }))
+
+    const currentParts: BOMItem[] = hasParts
+      ? project!.parts.map((p) => ({
+          name: p.name,
+          quantity: p.qty,
+          description: p.description ?? '',
+          category: p.category,
+          unitCost: p.unitCost,
+          supplier: '',
+          partNumber: p.model,
+          lcscId: (p as any).lcscId ?? '',
+          hqPartNumber: (p as any).hqPartNumber ?? '',
+        }))
+      : []
+
+    const context = {
+      projectName: project?.name ?? '未命名项目',
+      currentParts,
+      history: historyMessages,
+    }
+
     addMessage({ role: 'assistant', content: '' })
     setThinking('')
     setLoading(true)
@@ -62,124 +160,91 @@ export default function ChatPanel() {
 
     try {
       abortRef.current = new AbortController()
-      const res = await fetch('/api/bom/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description }),
-        signal: abortRef.current.signal,
-      })
 
-      if (!res.ok) {
-        const err = await res.text()
-        throw new Error(err || `HTTP ${res.status}`)
-      }
+      await handleBomStream(
+        mode,
+        mode === 'generate'
+          ? { description: userMessage }
+          : { instruction: userMessage, context },
+        project?.name ?? '',
+        (chunk: StreamingChunk) => {
+          if (chunk.phase === 'thinking') {
+            fullThinking += chunk.thinking ?? ''
+            setThinking(fullThinking)
+            useChatStore.setState((state) => ({
+              messages: state.messages.map((m) =>
+                m.id === aiMsgId
+                  ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
+                  : m
+              ),
+            }))
+          }
 
-      const reader = res.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+          if (chunk.phase === 'parsing') {
+            capturedThinking = fullThinking
+            setThinking(chunk.progress ?? '正在解析…')
+            useChatStore.setState((state) => ({
+              messages: state.messages.map((m) =>
+                m.id === aiMsgId ? { ...m, content: chunk.progress ?? '正在解析…' } : m
+              ),
+            }))
+          }
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+          if (chunk.phase === 'done' && chunk.result) {
+            const { result } = chunk
+            const items = (result.items ?? []).map(bomItemToPart)
+            const projectName = result.projectName ?? project?.name ?? '项目'
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6).trim()
-          if (data === '[DONE]' || data === '[DONE]\n') continue
-
-          try {
-            const chunk: StreamingChunk = JSON.parse(data)
-
-            if (chunk.phase === 'thinking') {
-              fullThinking += chunk.thinking ?? ''
-              setThinking(fullThinking)
-              useChatStore.setState((state) => ({
-                messages: state.messages.map((m) =>
-                  m.id === aiMsgId
-                    ? { ...m, content: `💡 思考中：${fullThinking.slice(-400)}` }
-                    : m
-                ),
+            // Persist to localStorage
+            try {
+              localStorage.setItem('mic_best_last_project', JSON.stringify({
+                bomResult: result,
+                projectName,
+                description: result.description ?? '',
+                imageUrl: '',
+                savedAt: Date.now(),
               }))
-            }
+            } catch {}
 
-            if (chunk.phase === 'parsing') {
-              capturedThinking = fullThinking  // snapshot before parsing clears it
-              setThinking(chunk.progress ?? '正在解析…')
-              useChatStore.setState((state) => ({
-                messages: state.messages.map((m) =>
-                  m.id === aiMsgId ? { ...m, content: chunk.progress ?? '正在解析…' } : m
-                ),
-              }))
-            }
+            // Update project store — full replacement for both generate & modify
+            updateBom(items, result.totalCost ?? 0, projectName, result.description ?? '')
 
-            if (chunk.phase === 'done' && chunk.result) {
-              const { result } = chunk
-              const items = (result.items ?? []).map((item) => ({
-                name: item.name,
-                category: mapCategory(item.category) as any,
-                model: item.partNumber || item.name,
-                description: item.description ?? '',
-                qty: item.quantity ?? 1,
-                unitCost: item.unitCost ?? 0,
-                lcscId: item.lcscId ?? '',
-                hqPartNumber: item.hqPartNumber ?? '',
-              }))
+            const reasoning = result.reasoning?.trim() || capturedThinking || ''
+            const isModify = mode === 'modify'
+            const header = isModify
+              ? `🔧 **BOM 已更新** — ${projectName}`
+              : `✅ **${projectName}** 已生成`
 
-              // Persist to localStorage with fresh result only, no merge
-              const timestamp = Date.now()
-              try {
-                localStorage.setItem('mic_best_last_project', JSON.stringify({
-                  bomResult: result,
-                  projectName: result.projectName ?? description,
-                  description: result.description ?? '',
-                  imageUrl: '',
-                  savedAt: timestamp,
-                }))
-              } catch {}
-
-              // Update store (live)
-              updateBom(items, result.totalCost ?? 0, result.projectName, result.description)
-
-              // Use captured thinking as fallback if result.reasoning is missing
-              const reasoning = result.reasoning?.trim() || capturedThinking || ''
-              const summary = `💡 **设计思路**
-${reasoning}
-
-✅ **${result.projectName}**
-${result.description}
+            const summary = `${isModify ? '🔧' : '💡'} **${isModify ? 'BOM 更新完成' : '设计思路'}**
+${reasoning ? `${reasoning}\n` : ''}${header}
+${result.description ?? ''}
 
 📦 ${items.length} 个元件 · 合计 ¥${result.totalCost}
+${isModify ? '✅ 变更已保存到当前项目' : '切换到 **BOM 标签页** 查看完整清单'}
 
-切换到 **BOM 标签页** 查看完整清单，可直接链接到 LCSC/1688/京东/华强北 采购。`
+${isModify ? '' : '支持直接链接到 LCSC / 1688 / 京东 / 华强北 采购。\n\n'}可以继续说「加一个 OLED 屏幕」「把 ESP32 换成树莓派」「删除第二个元件」来调整清单。`
 
-              useChatStore.setState((state) => ({
-                messages: state.messages.map((m) =>
-                  m.id === aiMsgId ? { ...m, content: summary } : m
-                ),
-              }))
+            useChatStore.setState((state) => ({
+              messages: state.messages.map((m) =>
+                m.id === aiMsgId ? { ...m, content: summary } : m
+              ),
+            }))
 
-              setThinking('')
-              // Switch to BOM tab
-              setTab('bom')
-            }
-
-            if (chunk.phase === 'error') {
-              useChatStore.setState((state) => ({
-                messages: state.messages.map((m) =>
-                  m.id === aiMsgId ? { ...m, content: `❌ 错误: ${chunk.error}` } : m
-                ),
-              }))
-              setThinking('')
-            }
-          } catch {
-            // skip malformed
+            setThinking('')
+            setTab(isModify ? 'bom' : 'bom')
           }
-        }
-      }
+
+          if (chunk.phase === 'error') {
+            useChatStore.setState((state) => ({
+              messages: state.messages.map((m) =>
+                m.id === aiMsgId ? { ...m, content: `❌ 错误: ${chunk.error}` } : m
+              ),
+            }))
+            setThinking('')
+          }
+        },
+        abortRef.current.signal
+      )
     } catch (err: any) {
       if (err.name === 'AbortError') {
         useChatStore.setState((state) => ({
@@ -201,27 +266,36 @@ ${result.description}
     }
   }
 
+  // ─── Submit ─────────────────────────────────────────────────────────────────
+
   const handleSubmit = async () => {
     if (!inputValue.trim() || isLoading) return
+    if (!project) return
 
     const userMessage = inputValue.trim()
     setInputValue('')
     addMessage({ role: 'user', content: userMessage })
 
-    if (isBomRequest(userMessage) && project) {
-      await handleBOMGeneration(userMessage)
+    const hasParts = (project.parts.length ?? 0) > 0
+    const mode = detectMode(userMessage, hasParts)
+
+    if (mode === 'generate' || hasParts) {
+      // Always run through BOM handler (generate or modify)
+      await runBomGeneration(userMessage, mode)
     } else {
-      // Generic chat fallback
+      // No parts, not a BOM request → generic fallback
       setLoading(true)
       setTimeout(() => {
         addMessage({
           role: 'assistant',
-          content: `我已收到: "${userMessage}"\n\n当前项目有 ${project?.parts.length ?? 0} 个元件。告诉我你想要什么，我会尽力帮你修改！`,
+          content: `我已收到: "${userMessage}"\n\n当前项目有 ${project.parts.length} 个元件。可以直接说「加一个温度传感器」来扩展 BOM，或者「帮我重新设计」来生成新的方案。`,
         })
         setLoading(false)
-      }, 1000)
+      }, 800)
     }
   }
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   if (collapsed) {
     return (
@@ -247,6 +321,11 @@ ${result.description}
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
           <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-g400)]">Chat</span>
+          {project && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-[var(--c-g800)] text-[var(--c-g500)] rounded font-mono">
+              {project.name.length > 12 ? project.name.slice(0, 12) + '…' : project.name}
+            </span>
+          )}
         </div>
         {isLoading && (
           <button
@@ -269,8 +348,9 @@ ${result.description}
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
-          <div className="text-xs text-[var(--c-g600)] text-center mt-8">
-            描述你的项目，我来帮你生成 BOM
+          <div className="text-xs text-[var(--c-g600)] text-center mt-8 space-y-2">
+            <p>描述你的项目，我来帮你生成 BOM</p>
+            <p className="text-[10px]">支持多轮对话，可以随时说"加一个…"来扩展</p>
           </div>
         )}
         {messages.map((msg) => (
@@ -294,13 +374,13 @@ ${result.description}
         )}
         {isLoading && !thinking && (
           <div className="text-sm text-[var(--c-g600)] animate-pulse">
-            ⚡ 正在生成…
+            ⚡ 正在处理…
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Credits indicator */}
+      {/* Credits */}
       {user && (
         <div className="px-3 py-1.5 border-t border-[var(--c-g800)] flex items-center gap-2 text-[10px] text-[var(--c-g600)]">
           <span>⚡</span>
@@ -316,16 +396,16 @@ ${result.description}
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="> 描述你的项目…"
+            placeholder={project ? '> 加一个温度传感器…' : '> 先创建一个项目'}
             className="flex-1 bg-transparent px-3 py-2 text-sm placeholder-[var(--c-g600)] focus:outline-none"
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSubmit()
             }}
-            disabled={isLoading}
+            disabled={isLoading || !project}
           />
           <button
             onClick={handleSubmit}
-            disabled={!inputValue.trim() || isLoading}
+            disabled={!inputValue.trim() || isLoading || !project}
             className="m-1 p-2 hover:bg-[var(--c-g800)] transition-colors disabled:opacity-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--c-g400)]">
