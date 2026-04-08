@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import PaddleProvider from './PaddleProvider'
 
 export const metadata: Metadata = {
   title: 'MIC.BEST - AI Hardware Prototype Design',
@@ -14,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="zh" suppressHydrationWarning>
       <body className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)] antialiased">
-        {children}
+        <PaddleProvider>{children}</PaddleProvider>
       </body>
     </html>
   )

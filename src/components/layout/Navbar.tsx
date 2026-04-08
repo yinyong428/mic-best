@@ -1,16 +1,25 @@
 'use client'
 
+import { useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useUserStore } from '@/stores/userStore'
 import UserDropdown from './UserDropdown'
+import CreditsPurchaseModal from '@/components/CreditsPurchaseModal'
 
 export default function Navbar() {
   const locale = useLocale() as 'en' | 'zh'
   const router = useRouter()
   const t = useTranslations('common')
   const tNav = useTranslations('navbar')
-  const { user } = useUserStore()
+  const { user, fetchProfile } = useUserStore()
+  const [showCredits, setShowCredits] = useState(false)
+
+  // Refresh credits when modal closes
+  const handleCreditsClose = () => {
+    setShowCredits(false)
+    if (user) fetchProfile(user.id)
+  }
 
   const switchLocale = (newLocale: 'en' | 'zh') => {
     // Use window.location to force absolute path navigation
@@ -79,13 +88,17 @@ export default function Navbar() {
 
         {user ? (
           <>
-            {/* Credits badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 border border-[var(--c-g700)] text-xs font-bold">
+            {/* Credits badge — click to buy more */}
+            <button
+              onClick={() => setShowCredits(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 border border-[var(--c-g700)] text-xs font-bold hover:border-[var(--c-accent)] transition-colors cursor-pointer"
+              title="购买更多 Credits"
+            >
               <svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="12" r="10" />
               </svg>
               <span className="text-white">{user.credits}</span>
-            </div>
+            </button>
             <UserDropdown />
           </>
         ) : (
@@ -95,6 +108,7 @@ export default function Navbar() {
           </>
         )}
       </div>
+      <CreditsPurchaseModal open={showCredits} onClose={handleCreditsClose} />
     </header>
   )
 }

@@ -17,8 +17,15 @@ function verifyPaddleSignature(rawBody: string, signature: string): boolean {
       .digest('hex')
     return signature === expected
   } catch {
-    return true
+    return false
   }
+}
+
+// Credit pack mapping — must match NEXT_PUBLIC_PADDLE_PRICE_CREDITS_*
+const CREDIT_PACKS: Record<string, number> = {
+  'pri_credits_10': 10,
+  'pri_credits_50': 50,
+  'pri_credits_100': 100,
 }
 
 export async function POST(req: NextRequest) {
@@ -36,15 +43,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  console.log('[Paddle Webhook]', event.event_type ?? event.type, JSON.stringify(event.data?.id ?? ''))
+  const eventType = event.event_type ?? event.type
+  console.log('[Paddle Webhook]', eventType, JSON.stringify(event.data?.id ?? ''))
 
   try {
-    switch (event.event_type ?? event.type) {
+    switch (eventType) {
+      // ── Subscription events ──────────────────────────────────────
       case 'subscription.created':
       case 'subscription.activated': {
         const sub = event.data
         const userId = sub.custom_data?.user_id
-
         if (userId) {
           const supabase = createServerClient()
           if (supabase) {
@@ -52,7 +60,7 @@ export async function POST(req: NextRequest) {
               .from('profiles')
               .update({ plan: 'pro' })
               .eq('id', userId)
-            console.log(`[Paddle] User ${userId} upgraded to PRO (subscription: ${sub.id})`)
+            console.log(`[Paddle] User ${userId} upgraded to PRO`)
           }
         }
         break
@@ -63,28 +71,77 @@ export async function POST(req: NextRequest) {
       case 'subscription.paused': {
         const sub = event.data
         const userId = sub.custom_data?.user_id
-
-        if (userId) {
+        if (userId && eventType === 'subscription.canceled') {
           const supabase = createServerClient()
-          if (supabase && event.event_type === 'subscription.canceled') {
+          if (supabase) {
             await supabase
               .from('profiles')
               .update({ plan: 'free' })
               .eq('id', userId)
-            console.log(`[Paddle] User ${userId} downgraded to FREE (cancelled)`)
+            console.log(`[Paddle] User ${userId} downgraded to FREE`)
           }
         }
         break
       }
 
+      // ── One-time transaction (credits purchase) ────────────────────
       case 'transaction.completed': {
         const tx = event.data
-        console.log(`[Paddle] Transaction completed: ${tx.id}, amount: ${tx.amount}`)
+        const userId = tx.custom_data?.user_id
+        const creditsAmount = tx.custom_data?.credits_amount
+
+        if (userId && creditsAmount) {
+          const supabase = createServerClient()
+          if (supabase) {
+            // Add credits to user's profile
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('credits')
+              .eq('id', userId)
+              .single()
+
+            const currentCredits = profile?.credits ?? 0
+            const newCredits = currentCredits + Number(creditsAmount)
+
+            await supabase
+              .from('profiles')
+              .update({ credits: newCredits })
+              .eq('id', userId)
+
+            console.log(
+              `[Paddle] Added ${creditsAmount} credits to user ${userId} (total: ${newCredits})`
+            )
+          }
+        } else if (userId && !creditsAmount) {
+          // Fallback: detect by price ID
+          const items = tx.items ?? []
+          for (const item of items) {
+            const credits = CREDIT_PACKS[item.priceId]
+            if (credits) {
+              const supabase = createServerClient()
+              if (supabase) {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('credits')
+                  .eq('id', userId)
+                  .single()
+
+                const newCredits = (profile?.credits ?? 0) + credits
+                await supabase
+                  .from('profiles')
+                  .update({ credits: newCredits })
+                  .eq('id', userId)
+                console.log(`[Paddle] Added ${credits} credits to user ${userId}`)
+              }
+              break
+            }
+          }
+        }
         break
       }
 
       default:
-        console.log(`[Paddle Webhook] Unhandled event: ${event.event_type ?? event.type}`)
+        console.log(`[Paddle Webhook] Unhandled event: ${eventType}`)
     }
   } catch (err) {
     console.error('[Paddle Webhook] Handler error:', err)
